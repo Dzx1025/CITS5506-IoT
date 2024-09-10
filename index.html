@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>IV Bag Monitor</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        height: 100vh;
+        margin: 0;
+      }
+      #iv-bag {
+        margin-top: 20px;
+        width: 200px;
+        height: 300px;
+        position: relative;
+        border: 2px solid #000;
+      }
+      #liquid {
+        background-color: lightblue;
+        width: 100%;
+        position: absolute;
+        bottom: 0;
+        transition: height 1s ease-in-out; /* Add transition */
+      }
+      #status {
+        font-size: 1.5em;
+        margin-top: 20px;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>IV Bag Monitor</h1>
+    <div id="iv-bag">
+      <div id="liquid"></div>
+    </div>
+    <div id="status">Status: <span id="state">On</span></div>
+    <div id="percentage">Volume: <span id="volume">100%</span></div>
+
+    <script>
+      function localUpdate(volume = 50, state = "on") {
+        try {
+          const data = { volume: volume, state: state };
+
+          document.getElementById("volume").innerText = data.volume + "%";
+          document.getElementById("state").innerText =
+            data.state.charAt(0).toUpperCase() + data.state.slice(1);
+
+          const liquidElement = document.getElementById("liquid");
+          liquidElement.style.height = data.volume + "%";
+          liquidElement.style.backgroundColor =
+            data.state === "on" ? "lightblue" : "gray";
+        } catch (error) {
+          console.error("Error fetching data:", error);
+        }
+      }
+      async function fetchData() {
+        try {
+          const response = await fetch("coap://localhost/ivbag");
+          const data = await response.json();
+
+          const volume = data.volume;
+          const state = data.state;
+
+          document.getElementById("volume").innerText = volume + "%";
+          document.getElementById("state").innerText =
+            state.charAt(0).toUpperCase() + state.slice(1);
+
+          const liquidElement = document.getElementById("liquid");
+          liquidElement.style.height = volume + "%";
+          liquidElement.style.backgroundColor =
+            state === "on" ? "lightblue" : "gray";
+        } catch (error) {
+          console.error("Error fetching data:", error);
+        }
+      }
+
+      // setInterval(fetchData, 5000);
+      // fetchData();
+    </script>
+  </body>
+</html>
