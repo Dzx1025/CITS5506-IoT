@@ -41,6 +41,7 @@
     </div>
     <div id="status">Status: <span id="state">On</span></div>
     <div id="percentage">Volume: <span id="volume">100%</span></div>
+    <div id="flow-rate">Flow Rate: <span id="rate">-</span> mL/h</div>
 
     <script>
       function localUpdate(volume = 50, state = "on") {
@@ -82,6 +83,42 @@
 
       // setInterval(fetchData, 5000);
       // fetchData();
+
+      // Updated code:
+
+      // May Han: using WebSocket to fetch data for real-time updates, cuz HTTP requests may lead to high latency for real-time updates, due to the overhead of establishing a new connection for each request. open for discussion.
+
+        const ESP32_IP = '192.168.1.1';
+        const socket = new WebSocket(`ws://${ESP32_IP}:81/`);
+
+        socket.onopen = function(e) {
+            console.log("[open] Connection established");
+        };
+
+        socket.onmessage = function(event) {
+            console.log(`[message] Data received from server: ${event.data}`);
+            const data = JSON.parse(event.data);
+            
+            document.getElementById('state').textContent = data.state;
+            document.getElementById('volume').textContent = data.volume + '%';
+            document.getElementById('rate').textContent = data.flowRate.toFixed(2);
+            
+            const liquidElement = document.getElementById('liquid');
+            liquidElement.style.height = data.volume + '%';
+            liquidElement.style.backgroundColor = data.state === 'on' ? 'lightblue' : 'gray';
+        };
+
+        socket.onclose = function(event) {
+            if (event.wasClean) {
+                console.log(`[close] Connection closed cleanly, code=${event.code} reason=${event.reason}`);
+            } else {
+                console.log('[close] Connection died');
+            }
+        };
+
+        socket.onerror = function(error) {
+            console.log(`[error] ${error.message}`);
+        };
     </script>
   </body>
 </html>
