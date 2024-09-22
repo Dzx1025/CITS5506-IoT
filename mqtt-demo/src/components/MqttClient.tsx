@@ -48,11 +48,27 @@ const MqttClient: React.FC = () => {
     client.on("offline", () => setConnectStatus("Offline"));
 
     client.on("message", (topic, message) => {
+      // Log raw message data for debugging
       console.log("Message received:", topic, message.toString());
+
       try {
-        const { level } = JSON.parse(message.toString());
-        if (typeof level === "number" && !isNaN(level)) {
-          setWaterLevel(Math.min(Math.max(level, 0), 100));
+        const parsedMessage = JSON.parse(message.toString());
+
+        if (
+          parsedMessage &&
+          typeof parsedMessage.level === "number" &&
+          !isNaN(parsedMessage.level)
+        ) {
+          const level = Math.min(Math.max(parsedMessage.level, 0), 100);
+          console.log("Parsed water level:", level);
+
+          // Update the water level state
+          setWaterLevel(level);
+        } else {
+          console.error(
+            "Invalid message format or missing 'level' field:",
+            parsedMessage,
+          );
         }
       } catch (error) {
         console.error("Error parsing MQTT message:", error);
