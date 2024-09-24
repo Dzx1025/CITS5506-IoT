@@ -19,7 +19,7 @@ const MqttClient: React.FC = () => {
     const client = mqtt.connect(MQTT_BROKER_URL, {
       clientId: `mqttjs_${Math.random().toString(16).slice(2, 10)}`,
       path: "/mqtt",
-      clean: true,
+      // keepalive: 60, // Ping every 60 seconds
       connectTimeout: 4000,
       reconnectPeriod: 4000,
     });
@@ -107,7 +107,9 @@ const MqttClient: React.FC = () => {
     <div className="p-6 flex flex-col items-center">
       <div className="relative w-32 h-64 border-4 border-gray-300 rounded-lg overflow-hidden bg-white">
         <div
-          className="absolute bottom-0 w-full bg-blue-500 transition-all duration-500"
+          className={`absolute bottom-0 w-full transition-all duration-500 ${
+            connectStatus === "Connected" ? "bg-blue-500" : "bg-gray-400"
+          }`}
           style={{ height: `${waterLevel}%` }}
         />
       </div>
