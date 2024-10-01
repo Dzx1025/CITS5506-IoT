@@ -8,10 +8,10 @@
 const char *ssid = "*******";
 const char *password = "********";
 
-WiFiClient espClient;
+WiFiClient wifi_client;
 
 // MQTT broker details
-PubSubClient mqtt_client(espClient);
+PubSubClient mqtt_client(wifi_client);
 
 const char *mqtt_server = "test.mosquitto.org";
 const int mqtt_port = 1883;
@@ -31,11 +31,11 @@ const int DOUT = 13;
 const int HX711_SCK = 14;
 
 float calibration_factor = -7050;
-float full_bottle_weight = 500; // Default value, can be changed via button
+float full_bottle_weight = 500;  // Default value, can be changed via button
 bool isFullBottleSet = false;
 float lastValidWeight = full_bottle_weight;
 unsigned long lastDebounceTime = 0;
-const unsigned long debounceDelay = 500; // 500 milliseconds debounce delay
+const unsigned long debounceDelay = 500;  // 500 milliseconds debounce delay
 
 // Pin for the button to set full bottle weight
 const int buttonPin = 2;
@@ -140,8 +140,8 @@ void setupInfluxDB() {
   }
 }
 
-bool isButtonPressed() { 
-  return digitalRead(buttonPin) == LOW; 
+bool isButtonPressed() {
+  return digitalRead(buttonPin) == LOW;
 }
 
 float readWeightFromSensor() {
@@ -151,7 +151,7 @@ float readWeightFromSensor() {
     float weight = -scale.get_units();
     Serial.print("current weight: ");
     Serial.println(weight);
-    lastValidWeight = weight; // Update last valid weight value
+    lastValidWeight = weight;  // Update last valid weight value
     return weight;
   }
   return lastValidWeight;
@@ -174,7 +174,7 @@ void calculateLevel(float current_weight) {
     Serial.println("Please set the full bottle weight by pressing the button.");
   } else if (full_bottle_weight != 0) {
     level = (current_weight / full_bottle_weight) * 100;
-    level = constrain(level, 0, 100); // Ensure level is between 0 and 100
+    level = constrain(level, 0, 100);  // Ensure level is between 0 and 100
   } else {
     level = 0;
   }
@@ -182,7 +182,7 @@ void calculateLevel(float current_weight) {
 
 void publishLevelData() {
   // Create a JSON document
-  StaticJsonDocument<200> data;
+  JsonDocument data;
   data["level"] = level;
   // Serialize JSON document to string
   String payload;
@@ -204,6 +204,6 @@ void writeDataToInfluxDB(int level) {
     Serial.println("Data written to InfluxDB");
   } else {
     Serial.print("InfluxDB write failed: ");
-    Serial.println(mqtt_client.getLastErrorMessage());
+    Serial.println(db_client.getLastErrorMessage());
   }
 }
