@@ -12,6 +12,7 @@ const MqttClient: React.FC = () => {
   const [alertThreshold, setAlertThreshold] = useState(15);
   const clientRef = useRef<mqtt.MqttClient | null>(null);
   const isSubscribedRef = useRef<boolean>(false);
+  const alertThresholdRef = useRef(alertThreshold);
 
   const mqttConnect = useCallback(() => {
     if (clientRef.current?.connected) return;
@@ -67,8 +68,9 @@ const MqttClient: React.FC = () => {
 
           // Update the water level state
           setWaterLevel(level);
-          // Show a browser notification if water level is below 15%
-          if (level < alertThreshold && Notification.permission === "granted") {
+          // console.log("level:", level, "- alter threshold:", alertThresholdRef.current);
+          // Show a browser notification if water level is below the alert threshold
+          if (level < alertThresholdRef.current && Notification.permission === "granted") {
             new Notification("Water Level Alert", {
               body: `Water level is low: ${level}%`,
             });
@@ -136,7 +138,7 @@ const MqttClient: React.FC = () => {
           value={alertThreshold}
           onChange={(e) => {
             const value = Number(e.target.value);
-            if (!isNaN(value)) {
+            if (!isNaN(value) && value >= 0 && value <= 100) {
               setAlertThreshold(value);
             }
           }}
