@@ -5,18 +5,19 @@ import mqtt from "mqtt";
 import { Toaster } from "react-hot-toast";
 import { alertNotify } from "@/components/common/toast";
 
-const MQTT_BROKER_URL = "wss://test.mosquitto.org:8081";
-const MQTT_TOPIC = "ivbag/40/testnum";
-const MQTT_THRESHOLD_TOPIC = "ivbag/40/threshold";
-
+const MQTT_BROKER_URL =
+  process.env.APP_MQTT_BROKER_URL || "wss://test.mosquitto.org:8081";
+const MQTT_TOPIC = process.env.APP_MQTT_TOPIC || "ivbag/40/testnum";
+const MQTT_THRESHOLD_TOPIC =
+  process.env.APP_MQTT_THRESHOLD_TOPIC || "ivbag/40/threshold";
 
 const MqttClient: React.FC = () => {
   const [connectStatus, setConnectStatus] = useState<string>("Disconnected");
   const [waterLevel, setWaterLevel] = useState<number>(100);
-  const [alertThreshold, setAlertThreshold] = useState(15);
+  const [alertThreshold, setAlertThreshold] = useState<number>(15);
   const clientRef = useRef<mqtt.MqttClient | null>(null);
   const isSubscribedRef = useRef<boolean>(false);
-  const alertThresholdRef = useRef(alertThreshold);
+  const alertThresholdRef = useRef<number>(alertThreshold);
 
   const mqttConnect = useCallback(() => {
     if (clientRef.current?.connected) return;
@@ -25,7 +26,7 @@ const MqttClient: React.FC = () => {
     const client = mqtt.connect(MQTT_BROKER_URL, {
       clientId: `mqttjs_${Math.random().toString(16).slice(2, 10)}`,
       path: "/mqtt",
-      // keepalive: 60, // Ping every 60 seconds
+      keepalive: 60, // Ping every 60 seconds
       connectTimeout: 4000,
       reconnectPeriod: 4000,
     });
@@ -132,18 +133,27 @@ const MqttClient: React.FC = () => {
         // Publish the new alert threshold to the MQTT topic
         if (clientRef.current?.connected) {
           const message = JSON.stringify({ threshold: value });
-          clientRef.current.publish(MQTT_THRESHOLD_TOPIC, message, {}, (err) => {
-            if (err) {
-              console.error("Failed to publish threshold:", err);
-            } else {
-              console.log(`Published alert threshold: ${message}`);
+          clientRef.current.publish(
+            MQTT_THRESHOLD_TOPIC,
+            message,
+            {},
+            (err) => {
+              if (err) {
+                console.error("Failed to publish threshold:", err);
+              } else {
+                console.log(`Published alert threshold: ${message}`);
+              }
             }
-          });
+          );
         } else {
-          console.error("MQTT client not connected. Unable to publish threshold.");
+          console.error(
+            "MQTT client not connected. Unable to publish threshold."
+          );
         }
       }
-    }, []);
+    },
+    []
+  );
 
   return (
     <>
