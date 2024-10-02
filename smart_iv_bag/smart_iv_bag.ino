@@ -47,7 +47,7 @@ const int buttonPin = 2;
 int buttonState = 0;
 
 // Pin for the LED
-const int buttonLedPin = 25;
+const int speakerLedPin = 25;
 const int weightLedPin = 32;  // LED for full weight setting
 const int networkLedPin = 33; // LED for network connection status
 const int communicationLedPin = 15;
@@ -64,6 +64,9 @@ int ledState = LOW;
 
 int user_threshold = 15;  // Default threshold
 
+unsigned long lastInfluxDBWrite = 0;
+const unsigned long influxDBWriteInterval = 5000; // 5 seconds
+
 void setup() {
   Serial.begin(115200);
 
@@ -75,18 +78,25 @@ void setup() {
   // Set up the button
   pinMode(buttonPin, INPUT_PULLUP);
   // Set up the LED
-  pinMode(buttonLedPin, OUTPUT);
+  pinMode(speakerLedPin, OUTPUT);
   pinMode(weightLedPin, OUTPUT);
   pinMode(networkLedPin, OUTPUT);
   pinMode(communicationLedPin, OUTPUT);
   pinMode(alertLedPin1, OUTPUT);
   pinMode(alertLedPin2, OUTPUT);
-  digitalWrite(buttonLedPin, LOW);
+  digitalWrite(speakerLedPin, LOW);
 
   setup_wifi();
 
   mqtt_client.setServer(mqtt_server, mqtt_port);
   mqtt_client.setCallback(callback);  // Set the callback function for incoming MQTT messages
+
+  if (mqtt_client.connected()) {
+    Serial.println("Connected to MQTT Broker!");
+    mqtt_client.subscribe(mqtt_threshold_topic);
+  } else {
+    Serial.println("Failed to connect to MQTT Broker.");
+  }
 
   setupInfluxDB();
 }
@@ -147,26 +157,33 @@ void loop() {
 
   calculateLevel(current_weight);
   if (isFullBottleSet) {
-    publishLevelData();
+    publishLevelData(currentMillis);
   }
 
-  // Serial.println(user_threshold);
-  // Serial.println(level);
+  Serial.print("current threshold:");
+  Serial.println(user_threshold);
+  Serial.print("current level:");
+  Serial.println(level);
 
   // Check the weight level against the user threshold, blink when level is under threshold
   if (level < user_threshold) {
-    if (currentMillis - previousMillis >= interval) {
-      previousMillis = currentMillis;
-      ledState = !ledState;
-      digitalWrite(alertLedPin1, ledState);
-      digitalWrite(alertLedPin2, !ledState);
+    for (int i = 0; i < 2; i++) {
+    digitalWrite(alertLedPin1, HIGH);
+    digitalWrite(alertLedPin2, LOW);
+    digitalWrite(speakerLedPin, LOW);
+    delay(250);
+    digitalWrite(alertLedPin1, LOW);
+    digitalWrite(alertLedPin2, HIGH);
+    digitalWrite(speakerLedPin, HIGH);
+    delay(250);
     }
   } else {
     digitalWrite(alertLedPin1, LOW);
     digitalWrite(alertLedPin2, LOW);
+    digitalWrite(speakerLedPin, LOW);
+    delay(1000);
   }
 
-  delay(1000);
 }
 
 // Function to connect to Wi-Fi
@@ -252,9 +269,9 @@ void setFullBottleWeight() {
   Serial.println("Full bottle weight set to: " + String(full_bottle_weight));
 
   // Turn on LED for 1 second after full bottle weight is set
-  digitalWrite(buttonLedPin, HIGH);
+  digitalWrite(speakerLedPin, HIGH);
   delay(1000);
-  digitalWrite(buttonLedPin, LOW);
+  digitalWrite(speakerLedPin, LOW);
 }
 
 void calculateLevel(float current_weight) {
@@ -269,7 +286,7 @@ void calculateLevel(float current_weight) {
   }
 }
 
-void publishLevelData() {
+void publishLevelData(unsigned long currentMillis) {
   // Create a JSON document
   JsonDocument data;
   data["level"] = level;
@@ -281,8 +298,11 @@ void publishLevelData() {
   Serial.println(payload);
   mqtt_client.publish(mqtt_topic, payload.c_str());
 
-  // Write data to InfluxDB
-  writeDataToInfluxDB(level);
+  // Write data to 
+  if (currentMillis - lastInfluxDBWrite >= influxDBWriteInterval) {
+    writeDataToInfluxDB(level);
+    lastInfluxDBWrite = currentMillis;
+  }
 }
 
 void writeDataToInfluxDB(int level) {
@@ -291,7 +311,7 @@ void writeDataToInfluxDB(int level) {
   Point sensorData("monitor variables");
   // Serial.println("Point created with measurement 'monitor variables'");
 
-  sensorData.addField("weight", (float)level);
+  sensorData.addField("weight", level);
   // Serial.print("Added field 'weight' with value: ");
   // Serial.println((float)level);
 
@@ -305,7 +325,7 @@ void writeDataToInfluxDB(int level) {
     // use the flux query as follow to show the data in influxdb Web UI 
     // from(bucket: "iv_bag")
     //  |> range(start: -5m)
-    //  |> filter(fn: (r) => r._measurement == "monitor_variables")
+    //  |> filter(fn: (r) => r._measurement == "monitor variables")
     //  |> filter(fn: (r) => r._field == "weight")
 }
 
@@ -337,6 +357,9 @@ void callback(char* topic, byte* payload, unsigned int length) {
     user_threshold = doc["threshold"];
     Serial.print("User set threshold: ");
     Serial.println(user_threshold);
+    digitalWrite(speakerLedPin, HIGH);
+    delay(200);
+    digitalWrite(speakerLedPin, LOW);
   } else {
     Serial.println("No 'threshold' field found in the message");
   }
