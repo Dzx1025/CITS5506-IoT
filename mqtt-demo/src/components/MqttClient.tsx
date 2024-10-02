@@ -5,6 +5,8 @@ import mqtt from "mqtt";
 
 const MQTT_BROKER_URL = "wss://test.mosquitto.org:8081";
 const MQTT_TOPIC = "ivbag/40/testnum";
+const MQTT_THRESHOLD_TOPIC = "ivbag/40/threshold";
+
 
 const MqttClient: React.FC = () => {
   const [connectStatus, setConnectStatus] = useState<string>("Disconnected");
@@ -115,6 +117,29 @@ const MqttClient: React.FC = () => {
     }
   }, [mqttConnect]);
 
+  const handleAlertThresholdChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const value = Number(e.target.value);
+      if (!isNaN(value) && value >= 0 && value <= 100) {
+        setAlertThreshold(value);
+        alertThresholdRef.current = value;
+
+        // Publish the new alert threshold to the MQTT topic
+        if (clientRef.current?.connected) {
+          const message = JSON.stringify({ threshold: value });
+          clientRef.current.publish(MQTT_THRESHOLD_TOPIC, message, {}, (err) => {
+            if (err) {
+              console.error("Failed to publish threshold:", err);
+            } else {
+              console.log(`Published alert threshold: ${message}`);
+            }
+          });
+        } else {
+          console.error("MQTT client not connected. Unable to publish threshold.");
+        }
+      }
+    }, []);
+
   return (
     <div className="p-6 flex flex-col items-center">
       <div className="relative w-32 h-64 border-4 border-gray-300 rounded-lg overflow-hidden bg-white">
@@ -140,12 +165,7 @@ const MqttClient: React.FC = () => {
           type="number"
           id="alertThreshold"
           value={alertThreshold}
-          onChange={(e) => {
-            const value = Number(e.target.value);
-            if (!isNaN(value) && value >= 0 && value <= 100) {
-              setAlertThreshold(value);
-            }
-          }}
+          onChange={handleAlertThresholdChange}
           className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-600 dark:border-gray-500 dark:placeholder-gray-400 dark:text-white"
           aria-label="Alert Threshold"
         />
