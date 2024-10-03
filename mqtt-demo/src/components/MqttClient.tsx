@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import mqtt from "mqtt";
 import { Toaster } from "react-hot-toast";
-import { alertNotify } from "@/components/common/toast";
+import { alertNotify } from "@/components/toast";
 
 const MQTT_BROKER_URL =
   process.env.APP_MQTT_BROKER_URL || "wss://test.mosquitto.org:8081";
