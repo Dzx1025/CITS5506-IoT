@@ -2,6 +2,8 @@
 
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import mqtt from "mqtt";
+import { Toaster } from "react-hot-toast";
+import { alertNotify } from "@/components/common/toast";
 
 const MQTT_BROKER_URL = "wss://test.mosquitto.org:8081";
 const MQTT_TOPIC = "ivbag/40/testnum";
@@ -72,13 +74,16 @@ const MqttClient: React.FC = () => {
           setWaterLevel(level);
           // console.log("level:", level, "- alter threshold:", alertThresholdRef.current);
           // Show a browser notification if water level is below the alert threshold
-          if (
-            level < alertThresholdRef.current &&
-            Notification.permission === "granted"
-          ) {
-            new Notification("Water Level Alert", {
-              body: `Water level is low: ${level}%`,
-            });
+          // if (
+          //   level < alertThresholdRef.current &&
+          //   Notification.permission === "granted"
+          // ) {
+          //   new Notification("Water Level Alert", {
+          //     body: `Water level is low: ${level}%`,
+          //   });
+          // }
+          if (level < alertThresholdRef.current) {
+            alertNotify("Water level is low: " + level + "%");
           }
         } else {
           console.error(
@@ -99,9 +104,9 @@ const MqttClient: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    if (Notification.permission !== "granted") {
-      Notification.requestPermission();
-    }
+    // if (Notification.permission !== "granted") {
+    //   Notification.requestPermission();
+    // }
     mqttConnect();
     alertThresholdRef.current = alertThreshold;
   }, [mqttConnect, alertThreshold]);
@@ -141,43 +146,46 @@ const MqttClient: React.FC = () => {
     }, []);
 
   return (
-    <div className="p-6 flex flex-col items-center">
-      <div className="relative w-32 h-64 border-4 border-gray-300 rounded-lg overflow-hidden bg-white">
-        <div
-          className={`absolute bottom-0 w-full transition-all duration-500 ${
-            connectStatus === "Connected" ? "bg-blue-500" : "bg-gray-400"
-          }`}
-          style={{ height: `${waterLevel}%` }}
-        />
-      </div>
-      <p className="mt-4">Water Level: {waterLevel}%</p>
-      <p className="mb-4">
-        MQTT Client Status: <strong>{connectStatus}</strong>
-      </p>
-      <div className="mb-4">
-        <label
-          htmlFor="alertThreshold"
-          className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+    <>
+      <Toaster />
+      <div className="p-6 flex flex-col items-center">
+        <div className="relative w-32 h-64 border-4 border-gray-300 rounded-lg overflow-hidden bg-white">
+          <div
+            className={`absolute bottom-0 w-full transition-all duration-500 ${
+              connectStatus === "Connected" ? "bg-blue-500" : "bg-gray-400"
+            }`}
+            style={{ height: `${waterLevel}%` }}
+          />
+        </div>
+        <p className="mt-4">Water Level: {waterLevel}%</p>
+        <p className="mb-4">
+          MQTT Client Status: <strong>{connectStatus}</strong>
+        </p>
+        <div className="mb-4">
+          <label
+            htmlFor="alertThreshold"
+            className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+          >
+            Alert Threshold (%):
+          </label>
+          <input
+            type="number"
+            id="alertThreshold"
+            value={alertThreshold}
+            onChange={handleAlertThresholdChange}
+            className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-600 dark:border-gray-500 dark:placeholder-gray-400 dark:text-white"
+            aria-label="Alert Threshold"
+          />
+        </div>
+        <button
+          className="bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded mb-4"
+          onClick={handleReconnect}
+          aria-label="Reconnect"
         >
-          Alert Threshold (%):
-        </label>
-        <input
-          type="number"
-          id="alertThreshold"
-          value={alertThreshold}
-          onChange={handleAlertThresholdChange}
-          className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-600 dark:border-gray-500 dark:placeholder-gray-400 dark:text-white"
-          aria-label="Alert Threshold"
-        />
+          Reconnect
+        </button>
       </div>
-      <button
-        className="bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded mb-4"
-        onClick={handleReconnect}
-        aria-label="Reconnect"
-      >
-        Reconnect
-      </button>
-    </div>
+    </>
   );
 };
 
