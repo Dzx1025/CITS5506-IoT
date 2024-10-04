@@ -1,5 +1,3 @@
-"use client";
-
 import { useState, useEffect, useRef, useCallback } from "react";
 import mqtt from "mqtt";
 import { alertNotify } from "@/components/toast";
@@ -7,9 +5,9 @@ import { alertNotify } from "@/components/toast";
 const MQTT_CONFIG = {
   BROKER_ADDRESS:
     process.env.APP_MQTT_BROKER_URL || "wss://test.mosquitto.org:8081",
-  PUBLIC_TOPIC: process.env.APP_MQTT_TOPIC || "ivbag/public",
-  PRIVATE_TOPIC: process.env.APP_MQTT_THRESHOLD_TOPIC || "ivbag/private/ctl",
-};
+  PUBLIC_TOPIC: process.env.APP_MQTT_PUBLIC_TOPIC || "ivbag/public",
+  PRIVATE_TOPIC: process.env.APP_MQTT_PRIVATE_TOPIC || "ivbag/private/ctl",
+} as const;
 
 const useMqttConnection = (initialAlertThreshold: number) => {
   const [connectStatus, setConnectStatus] = useState<string>("Disconnected");
@@ -20,15 +18,16 @@ const useMqttConnection = (initialAlertThreshold: number) => {
 
   const clientRef = useRef<mqtt.MqttClient | null>(null);
   const alertThresholdRef = useRef<number>(alertThreshold);
+  const connectionAttemptRef = useRef<boolean>(false);
 
-  // Update the alertThresholdRef whenever alertThreshold changes
   useEffect(() => {
     alertThresholdRef.current = alertThreshold;
   }, [alertThreshold]);
 
   const mqttConnect = useCallback(() => {
-    if (clientRef.current?.connected) return;
+    if (clientRef.current?.connected || connectionAttemptRef.current) return;
 
+    connectionAttemptRef.current = true;
     setConnectStatus("Connecting");
 
     const newClient = mqtt.connect(MQTT_CONFIG.BROKER_ADDRESS, {
@@ -38,9 +37,8 @@ const useMqttConnection = (initialAlertThreshold: number) => {
       reconnectPeriod: 4000,
     });
 
-    clientRef.current = newClient;
-
     newClient.on("connect", () => {
+      clientRef.current = newClient;
       setConnectStatus("Connected");
       console.log("Connected to MQTT broker");
 
@@ -56,9 +54,13 @@ const useMqttConnection = (initialAlertThreshold: number) => {
     newClient.on("error", (err) => {
       console.error("Connection error:", err);
       setConnectStatus("Error");
+      connectionAttemptRef.current = false;
     });
 
-    newClient.on("offline", () => setConnectStatus("Offline"));
+    newClient.on("offline", () => {
+      setConnectStatus("Offline");
+      connectionAttemptRef.current = false;
+    });
 
     newClient.on("message", (topic, message) => {
       console.log("Message received:", topic, message.toString());
@@ -71,12 +73,17 @@ const useMqttConnection = (initialAlertThreshold: number) => {
           typeof parsedMessage.level === "number" &&
           !isNaN(parsedMessage.level)
         ) {
-          const level = Math.min(Math.max(parsedMessage.level, 0), 100);
+          const level = parsedMessage.level;
+
           console.log("Parsed water level:", level);
+
+          if (level < 0 || level > 100) {
+            console.error("Invalid water level value:", level);
+            return;
+          }
 
           setWaterLevel(level);
 
-          // Use the latest alertThreshold value from the ref
           if (level < alertThresholdRef.current) {
             alertNotify(`Water level is low: ${level}%`);
           }
@@ -93,12 +100,16 @@ const useMqttConnection = (initialAlertThreshold: number) => {
   }, []);
 
   useEffect(() => {
-    mqttConnect();
+    const connectTimeout = setTimeout(() => {
+      mqttConnect();
+    }, 0);
 
     return () => {
+      clearTimeout(connectTimeout);
       if (clientRef.current?.connected) {
         clientRef.current.end();
       }
+      connectionAttemptRef.current = false;
     };
   }, [mqttConnect]);
 
@@ -106,6 +117,7 @@ const useMqttConnection = (initialAlertThreshold: number) => {
     if (clientRef.current) {
       clientRef.current.end(true, {}, () => {
         clientRef.current = null;
+        connectionAttemptRef.current = false;
         mqttConnect();
       });
     } else {
@@ -113,33 +125,26 @@ const useMqttConnection = (initialAlertThreshold: number) => {
     }
   }, [mqttConnect]);
 
-  const handleAlertThresholdChange = useCallback(
-    (value: number) => {
-      if (!isNaN(value) && value >= 0 && value <= 100) {
-        setAlertThreshold(value);
+  const handleAlertThresholdChange = useCallback((value: number) => {
+    if (!isNaN(value) && value >= 0 && value <= 100) {
+      setAlertThreshold(value);
 
-        if (clientRef.current?.connected) {
-          const message = JSON.stringify({ threshold: value });
-          clientRef.current.publish(
-            MQTT_CONFIG.PRIVATE_TOPIC,
-            message,
-            (err) => {
-              if (err) {
-                console.error("Failed to publish threshold:", err);
-              } else {
-                console.log(`Published alert threshold: ${message}`);
-              }
-            }
-          );
-        } else {
-          console.error(
-            "MQTT client not connected. Unable to publish threshold."
-          );
-        }
+      if (clientRef.current?.connected) {
+        const message = JSON.stringify({ threshold: value });
+        clientRef.current.publish(MQTT_CONFIG.PRIVATE_TOPIC, message, (err) => {
+          if (err) {
+            console.error("Failed to publish threshold:", err);
+          } else {
+            console.log(`Published alert threshold: ${message}`);
+          }
+        });
+      } else {
+        console.error(
+          "MQTT client not connected. Unable to publish threshold."
+        );
       }
-    },
-    [setAlertThreshold]
-  );
+    }
+  }, []);
 
   return {
     connectStatus,
