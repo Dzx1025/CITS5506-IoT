@@ -27,7 +27,7 @@ const Dashboard: React.FC = () => {
   const statusTextClass = isConnected ? "text-green-500" : "text-red-500";
 
   return (
-    <div className="rounded-xl shadow-lg p-8 max-w-md w-full flex-col items-center">
+    <div className="rounded-xl shadow-lg p-4 max-w-md w-full flex-col items-center">
       <Toaster />
       <div className="flex justify-center mb-8">
         <div className="relative w-32 h-96 border-4 border-gray-300 dark:border-gray-600 rounded-lg overflow-hidden">
