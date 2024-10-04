@@ -90,7 +90,7 @@ const useMqttConnection = (initialAlertThreshold: number) => {
         console.error("Error parsing MQTT message:", error);
       }
     });
-  }, []); // No dependencies
+  }, []);
 
   useEffect(() => {
     mqttConnect();

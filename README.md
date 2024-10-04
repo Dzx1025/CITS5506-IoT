@@ -32,21 +32,34 @@ This project implements a smart monitoring system for IV bags using a TTGO T-Bea
 
 ## Topics
 
-For patient: /ivbag/public:
+For patient: `/ivbag/public`:
+
+- **level** (Number): The percentage of infusion bag remaining.
+- **rate** (Number): Flow rates (mL/hr).
+- **timeLeft**: Estimate of remaining time.
+  - **hour** (Number)
+  - **minute** (Number)
 
 ```json
 {
-   "level": *,
-   "rate": *,
+  "level": 95,
+  "rate": 23.52,
+  "timeLeft": {
+    "hour": 2,
+    "minutes": 20
+  }
 }
 ```
 
-For hospital employees: /ivbag/private/ctl
+For hospital employees: `/ivbag/private/ctl`
+
+- **threshold** (Number): The warning lowest limit to be set.
+- **reset** (Boolean): Whether to stop the speaker alarm and prepare for a new infusion bag.
 
 ```json
 {
-   "threshold": *,
-   "reset": *,
+  "threshold": 20,
+  "reset": false
 }
 ```
 
