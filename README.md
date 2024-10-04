@@ -30,7 +30,7 @@ This project implements a smart monitoring system for IV bags using a TTGO T-Bea
   - PubSubClient
   - HX711
 
-## Topics
+## Topics for MQTT
 
 For patient: `/ivbag/public`:
 
