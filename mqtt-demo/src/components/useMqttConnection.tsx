@@ -32,7 +32,6 @@ const useMqttConnection = (initialAlertThreshold: number) => {
 
     const newClient = mqtt.connect(MQTT_CONFIG.BROKER_ADDRESS, {
       clientId: `patient_${Math.random().toString(16).slice(2, 10)}`,
-      keepalive: 60,
       connectTimeout: 4000,
       reconnectPeriod: 4000,
     });

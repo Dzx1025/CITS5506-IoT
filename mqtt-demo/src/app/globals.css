@@ -25,3 +25,22 @@ body {
     text-wrap: balance;
   }
 }
+
+.water-level {
+  font-size: 24px;
+  font-weight: bold;
+  color: #2196f3;
+  text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+.connected {
+  background-color: #2196f3;
+}
+
+.disconnected {
+  background-color: #cccccc;
+}
+
+.alert {
+  color: #ff0000;
+}

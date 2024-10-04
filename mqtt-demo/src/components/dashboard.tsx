@@ -1,22 +1,11 @@
 "use client";
 
 import React from "react";
+import { Droplet } from "lucide-react";
 import { Toaster } from "react-hot-toast";
 import useMqttConnection from "@/components/useMqttConnection";
 
-const WaterLevelIndicator: React.FC<{
-  level: number;
-  isConnected: boolean;
-}> = ({ level, isConnected }) => (
-  <div className="relative w-32 h-64 border-4 border-gray-300 rounded-lg overflow-hidden bg-white">
-    <div
-      className={`absolute bottom-0 w-full transition-all duration-500 ${
-        isConnected ? "bg-blue-500" : "bg-gray-400"
-      }`}
-      style={{ height: `${level}%` }}
-    />
-  </div>
-);
+const defaultAlertThreshold = 15;
 
 const Dashboard: React.FC = () => {
   const {
@@ -25,45 +14,70 @@ const Dashboard: React.FC = () => {
     alertThreshold,
     handleReconnect,
     handleAlertThresholdChange,
-  } = useMqttConnection(15);
+  } = useMqttConnection(defaultAlertThreshold);
+
+  const isConnected = connectStatus === "Connected";
+  const waterLevelTextClass =
+    connectStatus === "Connected"
+      ? waterLevel > alertThreshold
+        ? "text-blue-500"
+        : "alert"
+      : "text-gray-300";
+  const waterLevelBgClass = isConnected ? "bg-blue-500" : "bg-gray-400";
+  const statusTextClass = isConnected ? "text-green-500" : "text-red-500";
 
   return (
-    <>
+    <div className="rounded-xl shadow-lg p-8 max-w-md w-full flex-col items-center">
       <Toaster />
-      <div className="p-6 flex flex-col items-center">
-        <WaterLevelIndicator
-          level={waterLevel}
-          isConnected={connectStatus === "Connected"}
-        />
-        <p className="mt-4">Water Level: {waterLevel}%</p>
-        <p className="mb-4">
+      <div className="flex justify-center mb-8">
+        <div className="relative w-32 h-96 border-4 border-gray-300 dark:border-gray-600 rounded-lg overflow-hidden">
+          <div
+            className={`absolute bottom-0 w-full transition-all duration-500 ${waterLevelBgClass}`}
+            style={{ height: `${waterLevel}%` }}
+          >
+            <Droplet className="text-white w-full h-12 mt-2 animate-bounce" />
+          </div>
+        </div>
+      </div>
+
+      <div className="text-center mb-6">
+        <p className={`water-level ${waterLevelTextClass}`}>
+          Water Level: {waterLevel}%
+        </p>
+        <p className={`text-sm ${statusTextClass}`}>
           MQTT Client Status: <strong>{connectStatus}</strong>
         </p>
-        <div className="mb-4">
-          <label
-            htmlFor="alertThreshold"
-            className="block text-sm font-medium text-gray-700 dark:text-gray-300"
-          >
-            Alert Threshold (%):
-          </label>
-          <input
-            type="number"
-            id="alertThreshold"
-            value={alertThreshold}
-            onChange={(e) => handleAlertThresholdChange(Number(e.target.value))}
-            className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-600 dark:border-gray-500 dark:placeholder-gray-400 dark:text-white"
-            aria-label="Alert Threshold"
-          />
-        </div>
-        <button
-          className="bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded mb-4"
-          onClick={handleReconnect}
-          aria-label="Reconnect"
-        >
-          Reconnect
-        </button>
       </div>
-    </>
+
+      <div className="mb-6">
+        <label
+          htmlFor="alertThreshold"
+          className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+        >
+          Alert Threshold (%)
+        </label>
+        <input
+          type="number"
+          id="alertThreshold"
+          defaultValue={alertThreshold}
+          onChange={(e) =>
+            handleAlertThresholdChange(
+              e.target.value === ""
+                ? defaultAlertThreshold
+                : Number(e.target.value)
+            )
+          }
+          className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-700 dark:text-white"
+        />
+      </div>
+
+      <button
+        onClick={handleReconnect}
+        className="w-full bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-md transition duration-300 ease-in-out transform hover:-translate-y-1 hover:shadow-lg"
+      >
+        Reconnect
+      </button>
+    </div>
   );
 };
 
