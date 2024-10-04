@@ -1,6 +1,6 @@
 import dynamic from "next/dynamic";
 
-const DashBoard = dynamic(() => import("../components/Dashboard"), {
+const DashBoard = dynamic(() => import("../components/dashboard"), {
   ssr: false,
 });
 
