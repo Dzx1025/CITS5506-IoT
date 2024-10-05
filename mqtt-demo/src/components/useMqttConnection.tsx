@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import mqtt from "mqtt";
-import { alertNotify } from "@/components/toast";
+import { alertNotify } from "@/components/Toast";
 
 const MQTT_CONFIG = {
   BROKER_ADDRESS:

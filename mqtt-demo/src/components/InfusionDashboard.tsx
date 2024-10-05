@@ -3,11 +3,11 @@
 import React from "react";
 import { Droplet } from "lucide-react";
 import { Toaster } from "react-hot-toast";
-import useMqttConnection from "@/components/useMqttConnection";
+import useMqttConnection from "@/components/UseMqttConnection";
 
 const defaultAlertThreshold = 15;
 
-const Dashboard: React.FC = () => {
+const InfusionDashboard: React.FC = () => {
   const {
     connectStatus,
     waterLevel,
@@ -81,4 +81,4 @@ const Dashboard: React.FC = () => {
   );
 };
 
-export default Dashboard;
+export default InfusionDashboard;
