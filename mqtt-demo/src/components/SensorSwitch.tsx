@@ -13,7 +13,7 @@ const SensorSwitch: React.FC<SensorSwitchProps> = ({ options, children }) => {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center bg-gray-200 p-1 rounded-full">
+      <div className="flex items-center justify-center bg-gray-200 p-1 rounded-full">
         {options.map((option, index) => (
           <motion.button
             key={option}

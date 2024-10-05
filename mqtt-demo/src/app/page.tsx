@@ -1,16 +1,6 @@
 import dynamic from "next/dynamic";
-
-const SensorSwitch = dynamic(() => import("@/components/SensorSwitch"), {
-  ssr: false,
-  loading: () => <p>Loading...</p>, // Optional loading component
-});
-
-const InfusionDashboard = dynamic(
-  () => import("@/components/InfusionDashboard"),
-  {
-    ssr: false,
-  }
-);
+import SensorSwitch from "@/components/SensorSwitch";
+import InfusionDashboard from "@/components/InfusionDashboard";
 
 const ECGDashboard = dynamic(() => import("@/components/ECGDashboard"), {
   ssr: false,
@@ -25,7 +15,8 @@ const TemperatureDashboard = dynamic(
 
 export default function Home() {
   return (
-    <main className="flex min-h-screen flex-col items-center justify-between p-12 mt-8">
+    <main className="fixed-main flex min-h-screen flex-col items-center justify-top p-12">
+      {" "}
       <h3 className="text-4xl font-bold mb-4">VitalTrack Monitoring System</h3>
       <SensorSwitch
         options={[
