@@ -18,5 +18,6 @@ export const alertNotify = (message: string) =>
     ),
     {
       duration: 3000,
+      position: "top-right",
     }
   );

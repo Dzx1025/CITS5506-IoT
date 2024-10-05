@@ -5,12 +5,18 @@
 :root {
   --background: #ffffff;
   --foreground: #171717;
+  --primary: #2196f3;
+  --primary-dark: #1976d2;
+  --error: #ff0000;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
     --background: #0a0a0a;
     --foreground: #ededed;
+    --primary: #64b5f6;
+    --primary-dark: #42a5f5;
+    --error: #ff5252;
   }
 }
 
@@ -29,12 +35,12 @@ body {
 .water-level {
   font-size: 24px;
   font-weight: bold;
-  color: #2196f3;
+  color: var(--primary);
   text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.1);
 }
 
 .connected {
-  background-color: #2196f3;
+  background-color: var(--primary);
 }
 
 .disconnected {
@@ -42,5 +48,12 @@ body {
 }
 
 .alert {
-  color: #ff0000;
+  color: var(--error);
+}
+
+/* Dark mode specific styles */
+@media (prefers-color-scheme: dark) {
+  .disconnected {
+    background-color: #333333;
+  }
 }

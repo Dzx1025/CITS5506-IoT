@@ -13,14 +13,14 @@ const SensorSwitch: React.FC<SensorSwitchProps> = ({ options, children }) => {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-center bg-gray-200 p-1 rounded-full">
+      <div className="flex items-center justify-center bg-gray-800 p-1 rounded-full max-w-md mx-auto">
         {options.map((option, index) => (
           <motion.button
             key={option}
             className={`py-2 px-4 rounded-full text-sm font-medium transition-colors duration-200 ${
               selectedOption === index
-                ? "bg-white text-gray-800 shadow-md"
-                : "text-gray-600"
+                ? "bg-blue-500 text-white shadow-md"
+                : "text-gray-300 hover:text-white"
             }`}
             onClick={() => setSelectedOption(index)}
             whileTap={{ scale: 0.95 }}

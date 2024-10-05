@@ -11,9 +11,14 @@ const config: Config = {
       colors: {
         background: "var(--background)",
         foreground: "var(--foreground)",
+        primary: "var(--primary)",
+        "primary-dark": "var(--primary-dark)",
+        error: "var(--error)",
       },
     },
   },
   plugins: [],
+  darkMode: "media", // or 'class' if you prefer manual theme switching
 };
+
 export default config;
