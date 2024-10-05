@@ -130,6 +130,7 @@ const useMqttConnection = (initialAlertThreshold: number) => {
 
       if (clientRef.current?.connected) {
         const message = JSON.stringify({ threshold: value });
+        // Make sure board can receive the message
         clientRef.current.publish(MQTT_CONFIG.PRIVATE_TOPIC, message, (err) => {
           if (err) {
             console.error("Failed to publish threshold:", err);

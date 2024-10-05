@@ -1,12 +1,23 @@
 import dynamic from "next/dynamic";
 
 const SensorSwitch = dynamic(() => import("@/components/SensorSwitch"), {
-  ssr: false, // Set to false if you don't need server-side rendering for this component
+  ssr: false,
   loading: () => <p>Loading...</p>, // Optional loading component
 });
 
 const InfusionDashboard = dynamic(
   () => import("@/components/InfusionDashboard"),
+  {
+    ssr: false,
+  }
+);
+
+const ECGDashboard = dynamic(() => import("@/components/ECGDashboard"), {
+  ssr: false,
+});
+
+const TemperatureDashboard = dynamic(
+  () => import("@/components/TemperatureDashboard"),
   {
     ssr: false,
   }
@@ -24,8 +35,8 @@ export default function Home() {
         ]}
       >
         <InfusionDashboard />
-        <InfusionDashboard />
-        <InfusionDashboard />
+        <ECGDashboard />
+        <TemperatureDashboard />
       </SensorSwitch>
     </main>
   );
