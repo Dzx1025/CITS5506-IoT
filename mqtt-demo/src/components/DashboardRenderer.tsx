@@ -5,14 +5,17 @@ import dynamic from "next/dynamic";
 import SensorSwitch from "@/components/SensorSwitch";
 
 const InfusionDashboard = dynamic(
-  () => import("@/components/InfusionDashboard"),
+  () => import("@/components/Dashboards/InfusionDashboard"),
   { ssr: false }
 );
-const ECGDashboard = dynamic(() => import("@/components/ECGDashboard"), {
-  ssr: false,
-});
+const ECGDashboard = dynamic(
+  () => import("@/components/Dashboards/ECGDashboard"),
+  {
+    ssr: false,
+  }
+);
 const TemperatureDashboard = dynamic(
-  () => import("@/components/TemperatureDashboard"),
+  () => import("@/components/Dashboards/TemperatureDashboard"),
   { ssr: false }
 );
 

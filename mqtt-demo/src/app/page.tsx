@@ -1,4 +1,4 @@
-import ConnectionDetails from "@/components/ConnectionDetails";
+import ConnectionDetails from "@/components/Dashboards/ConnectionDetails";
 import { Toaster } from "react-hot-toast";
 
 export default function Home() {
