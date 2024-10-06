@@ -33,7 +33,7 @@ const ECGDashboard = () => {
   }, []);
 
   return (
-    <div className="bg-white p-4 rounded-lg shadow-md">
+    <div className="p-4 rounded-lg shadow-md">
       <h2 className="text-2xl font-bold mb-4">ECG Dashboard</h2>
       <div className="h-64">
         <ResponsiveContainer width="100%" height="100%">

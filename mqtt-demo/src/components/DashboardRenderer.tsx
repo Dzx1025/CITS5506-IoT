@@ -43,7 +43,7 @@ const DashboardRenderer: React.FC<DashboardRendererProps> = ({
 }) => {
   return (
     <SensorSwitch
-      options={["Infusion pump Sensors", "ECG Sensors", "Temperature Sensors"]}
+      options={["IV Bag", "ECG", "Temperature"]}
     >
       <InfusionDashboard
         connectStatus={connectStatus}

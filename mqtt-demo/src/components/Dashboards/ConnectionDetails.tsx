@@ -9,6 +9,7 @@ import {
   LogOut,
   Phone,
   AlertCircle,
+  User,
 } from "lucide-react";
 import useMqttConnection from "@/components/UseMqttConnection";
 import DashboardRenderer from "@/components/DashboardRenderer";
@@ -105,24 +106,50 @@ const ConnectionDetails: React.FC = () => {
     console.log("Contact button clicked");
   };
 
-  const statusColor = isConnected ? "text-green-400" : "text-red-400";
   const Icon = isConnected ? Wifi : WifiOff;
-  const buttonClass =
-    "font-bold py-2 px-4 rounded-md transition duration-300 ease-in-out text-sm";
-  const activeButtonClass =
-    "bg-green-500 hover:bg-green-600 text-white transform hover:-translate-y-0.5 hover:shadow-lg";
-  const disabledButtonClass = "bg-gray-500 text-gray-300 cursor-not-allowed";
 
   return (
-    <div className="space-y-6">
-      <div className="bg-gray-900 text-white p-4 rounded-xl shadow-lg w-full max-w-md mx-auto">
+    <div className="space-y-6 p-4 max-w-md mx-auto">
+      <DashboardRenderer
+        connectStatus={connectStatus}
+        sensorData={sensorData}
+        setAlertThreshold={setAlertThreshold}
+        setReset={setReset}
+      />
+      <div className="bg-card-background text-foreground p-4 rounded-lg shadow-md border border-gray-200 dark:border-gray-700">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center">
-            <Icon className={`w-6 h-6 mr-2 ${statusColor}`} />
-            <span className={`font-medium ${statusColor}`}>
+            <Icon
+              className={`w-6 h-6 mr-2 ${
+                isConnected ? "text-success" : "text-error"
+              }`}
+            />
+            <span
+              className={`font-medium ${
+                isConnected ? "text-success" : "text-error"
+              }`}
+            >
               {connectStatus}
             </span>
           </div>
+          {loggedInDoctor && (
+            <div className="flex items-center space-x-2">
+              <button
+                onClick={handleContact}
+                className="p-2 rounded-full bg-primary text-white hover:bg-primary-dark transition-colors duration-300"
+                title="Contact"
+              >
+                <Phone size={16} />
+              </button>
+              <button
+                onClick={handleLogout}
+                className="p-2 rounded-full bg-gray-200 text-gray-700 hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600 transition-colors duration-300"
+                title="Logout"
+              >
+                <LogOut size={16} />
+              </button>
+            </div>
+          )}
         </div>
         <div className="space-y-2 mb-4">
           <div className="flex space-x-2">
@@ -131,52 +158,37 @@ const ConnectionDetails: React.FC = () => {
               placeholder="Patient ID (required)"
               value={patientId || ""}
               onChange={(e) => handlePatientIdChange(Number(e.target.value))}
-              className={`flex-grow bg-gray-800 text-white px-3 py-2 rounded ${
-                !isPatientIdValid && patientId !== 0
-                  ? "border-red-500 border"
-                  : ""
-              }`}
+              className="w-full px-4 py-2 bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md text-foreground focus:ring-primary focus:border-primary transition-colors duration-300"
             />
             <button
               onClick={handleReconnect}
               disabled={!isPatientIdValid}
-              className={`${buttonClass} ${
-                isPatientIdValid ? activeButtonClass : disabledButtonClass
+              className={`px-4 py-2 rounded-md transition-colors duration-300 ${
+                isPatientIdValid
+                  ? "bg-primary text-white hover:bg-primary-dark"
+                  : "bg-gray-500 text-gray-300 dark:bg-gray-700 dark:text-gray-500 cursor-not-allowed"
               }`}
             >
               Reconnect
             </button>
           </div>
           {!isPatientIdValid && patientId !== 0 && (
-            <p className="text-red-500 text-xs mt-1">Patient ID is required</p>
+            <p className="text-error text-xs mt-1">Patient ID is required</p>
           )}
         </div>
-        <div className="border-t border-gray-700 pt-4 mt-4">
+        <div className="border-t border-gray-300 dark:border-gray-700 pt-4 mt-4">
           {loggedInDoctor ? (
             <div className="flex items-center justify-between">
-              <span className="text-green-400">
+              <span className="text-success flex items-center">
+                <User size={16} className="mr-2" />
                 Logged in as: {loggedInDoctor}
               </span>
-              <div className="space-x-2">
-                <button
-                  onClick={handleContact}
-                  className={`${buttonClass} bg-blue-500 hover:bg-blue-600 text-white`}
-                >
-                  <Phone size={16} />
-                </button>
-                <button
-                  onClick={handleLogout}
-                  className={`${buttonClass} bg-red-500 hover:bg-red-600 text-white`}
-                >
-                  <LogOut size={16} />
-                </button>
-              </div>
             </div>
           ) : (
             <>
               <button
                 onClick={() => setShowCredentials(!showCredentials)}
-                className="flex items-center justify-between w-full text-left text-sm font-medium text-gray-300 hover:text-white"
+                className="flex items-center justify-between w-full text-left text-sm font-medium text-gray-600 dark:text-gray-300 hover:text-primary transition-colors duration-300"
               >
                 Advanced Settings
                 {showCredentials ? (
@@ -192,28 +204,28 @@ const ConnectionDetails: React.FC = () => {
                     placeholder="Username"
                     value={username}
                     onChange={(e) => setUsername(e.target.value)}
-                    className="w-full bg-gray-800 text-white px-3 py-2 rounded"
+                    className="w-full px-4 py-2 bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md text-foreground focus:ring-primary focus:border-primary transition-colors duration-300"
                   />
                   <input
                     type="password"
                     placeholder="Password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    className="w-full bg-gray-800 text-white px-3 py-2 rounded"
+                    className="w-full px-4 py-2 bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md text-foreground focus:ring-primary focus:border-primary transition-colors duration-300"
                   />
                   <button
                     onClick={handleConnect}
                     disabled={!username || !password || !isPatientIdValid}
-                    className={`w-full ${buttonClass} ${
+                    className={`w-full px-4 py-2 rounded-md transition-colors duration-300 ${
                       username && password && isPatientIdValid
-                        ? activeButtonClass
-                        : disabledButtonClass
+                        ? "bg-primary text-white hover:bg-primary-dark"
+                        : "bg-gray-500 text-gray-300 dark:bg-gray-700 dark:text-gray-500 cursor-not-allowed"
                     }`}
                   >
                     Verify
                   </button>
                   {error && (
-                    <div className="flex items-center text-red-500 text-sm mt-2">
+                    <div className="flex items-center text-error text-sm mt-2">
                       <AlertCircle size={16} className="mr-2" />
                       {error}
                     </div>
@@ -224,13 +236,6 @@ const ConnectionDetails: React.FC = () => {
           )}
         </div>
       </div>
-
-      <DashboardRenderer
-        connectStatus={connectStatus}
-        sensorData={sensorData}
-        setAlertThreshold={setAlertThreshold}
-        setReset={setReset}
-      />
     </div>
   );
 };

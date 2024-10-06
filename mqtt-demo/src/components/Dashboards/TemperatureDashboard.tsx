@@ -12,7 +12,9 @@ import {
 } from "recharts";
 
 const TemperatureDashboard = () => {
-  const [tempData, setTempData] = useState<{ time: string; temp: number }[]>([]);
+  const [tempData, setTempData] = useState<{ time: string; temp: number }[]>(
+    []
+  );
 
   useEffect(() => {
     // Simulating temperature data
@@ -31,7 +33,7 @@ const TemperatureDashboard = () => {
   }, []);
 
   return (
-    <div className="bg-white p-4 rounded-lg shadow-md">
+    <div className="p-4 rounded-lg shadow-md">
       <h2 className="text-2xl font-bold mb-4">Temperature Dashboard</h2>
       <div className="h-64">
         <ResponsiveContainer width="100%" height="100%">

@@ -3,11 +3,11 @@ import { Toaster } from "react-hot-toast";
 
 export default function Home() {
   return (
-    <main className="min-h-screen p-4 sm:p-8 bg-gray-950 text-white">
+    <main className="min-h-screen p-4 sm:p-8">
       <Toaster />
-      <div className="max-w-4xl mx-auto">
+      <div className="space-y-6 p-4 max-w-md mx-auto">
         <h1 className="text-2xl sm:text-4xl font-bold mb-6 text-center">
-          VitalTrack Monitoring System
+          VitalTrack System
         </h1>
         <ConnectionDetails />
       </div>

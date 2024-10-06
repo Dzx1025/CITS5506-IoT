@@ -5,51 +5,76 @@
 :root {
   --background: #ffffff;
   --foreground: #171717;
+  --card-background: #f3f4f6;
   --primary: #2196f3;
   --primary-dark: #1976d2;
-  --error: #ff0000;
+  --secondary: #64b5f6;
+  --accent: #42a5f5;
+  --error: #ff5252;
+  --success: #4caf50;
+  --warning: #ffc107;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
     --background: #0a0a0a;
     --foreground: #ededed;
+    --card-background: #1e1e1e;
     --primary: #64b5f6;
     --primary-dark: #42a5f5;
+    --secondary: #90caf9;
+    --accent: #2196f3;
     --error: #ff5252;
-  }
-  .disconnected {
-    background-color: #333333;
+    --success: #66bb6a;
+    --warning: #ffd54f;
   }
 }
 
 body {
   color: var(--foreground);
   background: var(--background);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: "Inter", Arial, sans-serif;
 }
 
-@layer utilities {
-  .text-balance {
-    text-wrap: balance;
-  }
-}
-
-.water-level {
-  font-size: 24px;
-  font-weight: bold;
-  color: var(--primary);
-  text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.1);
+.card {
+  background-color: var(--card-background);
+  border-radius: 1rem;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1),
+    0 2px 4px -1px rgba(0, 0, 0, 0.06);
 }
 
 .connected {
-  background-color: var(--primary);
+  color: var(--success);
 }
 
 .disconnected {
-  background-color: #cccccc;
+  color: var(--error);
 }
 
-.alert {
+.button {
+  @apply font-bold py-2 px-4 rounded-md transition duration-300 ease-in-out text-sm;
+}
+
+.button-primary {
+  @apply bg-blue-500 text-white hover:bg-blue-600;
+}
+
+.button-secondary {
+  @apply bg-gray-500 text-white hover:bg-gray-600;
+}
+
+.input {
+  @apply w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-md text-white focus:ring-blue-500 focus:border-blue-500 transition-colors duration-300;
+}
+
+.water-level-high {
+  color: var(--success);
+}
+
+.water-level-low {
   color: var(--error);
+}
+
+.water-level-normal {
+  color: var(--primary);
 }
