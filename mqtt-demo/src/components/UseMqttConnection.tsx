@@ -1,5 +1,5 @@
-import { useState, useEffect, useRef, useCallback } from "react";
-import mqtt from "mqtt";
+import { useState, useCallback, useEffect, useRef } from "react";
+import mqtt, { MqttClient } from "mqtt";
 
 const MQTT_CONFIG = {
   BROKER_ADDRESS:
@@ -9,172 +9,222 @@ const MQTT_CONFIG = {
     process.env.NEXT_PUBLIC_MQTT_PRIVATE_TOPIC || "private/ctl/ivbag/",
 } as const;
 
-const useMqttConnection = () => {
-  const [connectStatus, setConnectStatus] = useState<string>("Disconnected");
-  const [isLoggedIn, setIsLoggedIn] = useState<boolean>(false);
-  const [sensorData, setSensorData] = useState({
-    infusion: {
-      level: 100,
-      rate: 0.0,
-      timeLeft: {
-        hour: 999,
-        minute: 999,
-      },
-      alertThreshold: 15,
+const DEFAULT_SENSOR_DATA = {
+  infusion: {
+    level: 100,
+    rate: 0.0,
+    timeLeft: {
+      hour: 999,
+      minute: 999,
     },
-  });
-  const clientRef = useRef<mqtt.MqttClient | null>(null);
+    alertThreshold: 15,
+  },
+};
+
+type SensorData = typeof DEFAULT_SENSOR_DATA;
+type LoginType = "anonymous" | "user";
+
+interface ConnectionResult {
+  success: boolean;
+  error?: string;
+}
+
+interface UseMqttConnectionResult {
+  connectStatus: string;
+  sensorData: SensorData;
+  connect: (
+    username: string,
+    password: string,
+    patientId: number
+  ) => Promise<ConnectionResult>;
+  reconnect: (newPatientId?: number) => Promise<ConnectionResult>;
+  setAlertThreshold: (threshold: number) => Promise<boolean>;
+  setReset: (reset: boolean) => Promise<boolean>;
+  disconnect: () => void;
+  resetSensorData: () => void;
+  isAnonymous: boolean;
+}
+
+export function useMqttConnection(): UseMqttConnectionResult {
+  const [connectStatus, setConnectStatus] = useState<string>("Disconnected");
+  const [sensorData, setSensorData] = useState<SensorData>(DEFAULT_SENSOR_DATA);
+  const [isAnonymous, setIsAnonymous] = useState<boolean>(true);
+  const clientRef = useRef<MqttClient | null>(null);
+  const patientIdRef = useRef<number | null>(null);
 
   const connect = useCallback(
-    (username: string, password: string, patientId: number) => {
-      return new Promise<void>((resolve, reject) => {
-        if (clientRef.current?.connected) {
+    (
+      username: string,
+      password: string,
+      patientId: number
+    ): Promise<ConnectionResult> => {
+      return new Promise((resolve) => {
+        if (clientRef.current) {
           clientRef.current.end();
         }
 
-        console.log(`Connecting to MQTT broker: ${MQTT_CONFIG.BROKER_ADDRESS}`);
+        setConnectStatus("Connecting");
+        patientIdRef.current = patientId;
 
-        const newClient = mqtt.connect(MQTT_CONFIG.BROKER_ADDRESS, {
-          clientId: `patient_${patientId}_${Math.random()
-            .toString(16)
-            .slice(2, 10)}`,
-          username,
-          password,
-          connectTimeout: 4000,
-          reconnectPeriod: 4000,
-          path: "/mqtt",
+        const loginType: LoginType =
+          username && password ? "user" : "anonymous";
+        setIsAnonymous(loginType === "anonymous");
+
+        const client = mqtt.connect(MQTT_CONFIG.BROKER_ADDRESS, {
+          username: username || undefined,
+          password: password || undefined,
+          path: "/ws",
         });
 
-        newClient.on("connect", () => {
-          clientRef.current = newClient;
+        client.on("connect", () => {
           setConnectStatus("Connected");
-          setIsLoggedIn(true);
-          console.log(`Connected to server with${username ? "" : "out"} login`);
-
-          newClient.subscribe(
-            `${MQTT_CONFIG.PUBLIC_TOPIC}${patientId}`,
-            (err) => {
-              if (err) {
-                console.error("Subscription error:", err);
-                reject(new Error("Subscription failed"));
-              } else {
-                console.log(
-                  `Subscribed to topic: ${MQTT_CONFIG.PUBLIC_TOPIC}${patientId}`
-                );
-                resolve();
-              }
-            }
-          );
+          console.log(`Connected to ${MQTT_CONFIG.BROKER_ADDRESS}`);
+          client.subscribe(`${MQTT_CONFIG.PUBLIC_TOPIC}${patientId}`);
+          console.log(`Subscribed to ${MQTT_CONFIG.PUBLIC_TOPIC}${patientId}`);
+          resolve({ success: true });
         });
 
-        newClient.on("error", (err) => {
-          console.error("Connection error:", err);
-          setConnectStatus("Error");
-          setIsLoggedIn(false);
-          reject(err);
-        });
-
-        newClient.on("offline", () => {
-          setConnectStatus("Offline");
-          setIsLoggedIn(false);
-        });
-
-        newClient.on("message", (topic, message) => {
-          console.log("Message received:", topic, message.toString());
+        client.on("message", (topic, message) => {
+          console.log("Received message:", message.toString());
           try {
-            const parsedMessage = JSON.parse(message.toString());
-            setSensorData((prev) => ({
-              ...prev,
+            const data = JSON.parse(message.toString());
+            setSensorData((prevData) => ({
+              ...prevData,
               infusion: {
-                ...prev.infusion,
-                level: parsedMessage.level ?? prev.infusion.level,
-                rate: parsedMessage.rate ?? prev.infusion.rate,
-                timeLeft: parsedMessage.timeLeft ?? prev.infusion.timeLeft,
+                ...prevData.infusion,
+                level: data.level,
+                rate: data.rate,
+                timeLeft: data.timeLeft,
               },
             }));
           } catch (error) {
-            console.error("Error parsing MQTT message:", error);
+            console.error("Error parsing message:", error);
           }
         });
+
+        client.on("error", (err) => {
+          console.error("MQTT connection error:", err);
+          setConnectStatus("Error");
+          if (err.message.includes("Not authorized")) {
+            resolve({ success: false, error: "Authentication failed" });
+          } else {
+            resolve({ success: false, error: "Connection error" });
+          }
+        });
+
+        client.on("close", () => {
+          setConnectStatus("Disconnected");
+        });
+
+        client.on("offline", () => {
+          setConnectStatus("Offline");
+        });
+
+        clientRef.current = client;
       });
     },
     []
+  );
+
+  const reconnect = useCallback(
+    (newPatientId?: number): Promise<ConnectionResult> => {
+      if (clientRef.current) {
+        clientRef.current.end();
+      }
+      if (newPatientId !== undefined) {
+        patientIdRef.current = newPatientId;
+      }
+      return connect("", "", patientIdRef.current!);
+    },
+    [connect]
+  );
+
+  const setAlertThreshold = useCallback(
+    (threshold: number): Promise<boolean> => {
+      return new Promise((resolve) => {
+        if (
+          !isAnonymous &&
+          clientRef.current &&
+          clientRef.current.connected &&
+          patientIdRef.current
+        ) {
+          clientRef.current.publish(
+            `${MQTT_CONFIG.PRIVATE_TOPIC}${patientIdRef.current}`,
+            JSON.stringify({ threshold }),
+            { qos: 1 },
+            (error) => {
+              if (error) {
+                console.error("Failed to set alert threshold:", error);
+                resolve(false);
+              } else {
+                console.log("Alert threshold set successfully");
+                resolve(true);
+              }
+            }
+          );
+        } else {
+          console.log(
+            "Failed to set alert threshold: Not connected or anonymous"
+          );
+          resolve(false);
+        }
+      });
+    },
+    [isAnonymous]
+  );
+
+  const setReset = useCallback(
+    (reset: boolean): Promise<boolean> => {
+      return new Promise((resolve) => {
+        if (
+          !isAnonymous &&
+          clientRef.current &&
+          clientRef.current.connected &&
+          patientIdRef.current
+        ) {
+          clientRef.current.publish(
+            `${MQTT_CONFIG.PRIVATE_TOPIC}${patientIdRef.current}`,
+            JSON.stringify({ reset }),
+            { qos: 1 }, // Make sure the message is delivered
+            (error) => {
+              if (error) {
+                console.error("Failed to set reset:", error);
+                resolve(false);
+              } else {
+                console.log("Reset set successfully");
+                resolve(true);
+              }
+            }
+          );
+        } else {
+          console.log("Failed to set reset: Not connected or anonymous");
+          resolve(false);
+        }
+      });
+    },
+    [isAnonymous]
   );
 
   const disconnect = useCallback(() => {
     if (clientRef.current) {
       clientRef.current.end();
       clientRef.current = null;
-      setConnectStatus("Disconnected");
-      setIsLoggedIn(false);
     }
+    setConnectStatus("Disconnected");
+    setIsAnonymous(true);
   }, []);
 
-  const reconnect = useCallback(
-    (patientId: number) => {
-      disconnect();
-      connect("", "", patientId).catch((err) =>
-        console.error("Reconnection failed:", err)
-      );
-    },
-    [connect, disconnect]
-  );
-
-  const publishMessage = useCallback((topic: string, message: string) => {
-    if (clientRef.current?.connected) {
-      clientRef.current.publish(topic, message, (err) => {
-        if (err) {
-          console.error("Failed to publish message:", err);
-        } else {
-          console.log(`Published message to ${topic}: ${message}`);
-        }
-      });
-    } else {
-      console.error("MQTT client not connected. Unable to publish message.");
-    }
+  const resetSensorData = useCallback(() => {
+    setSensorData(DEFAULT_SENSOR_DATA);
   }, []);
-
-  const setAlertThreshold = useCallback(
-    (value: number) => {
-      if (isLoggedIn) {
-        setSensorData((prev) => ({
-          ...prev,
-          infusion: { ...prev.infusion, alertThreshold: value },
-        }));
-        publishMessage(
-          MQTT_CONFIG.PRIVATE_TOPIC,
-          JSON.stringify({ threshold: value })
-        );
-      } else {
-        console.error("Not logged in. Unable to set alert threshold.");
-      }
-    },
-    [publishMessage, isLoggedIn]
-  );
-
-  const setReset = useCallback(
-    (value: boolean) => {
-      if (isLoggedIn) {
-        publishMessage(
-          MQTT_CONFIG.PRIVATE_TOPIC,
-          JSON.stringify({ reset: value })
-        );
-      } else {
-        console.error("Not logged in. Unable to reset.");
-      }
-    },
-    [publishMessage, isLoggedIn]
-  );
-
-  const logout = useCallback(() => {
-    disconnect();
-  }, [disconnect]);
 
   useEffect(() => {
     return () => {
-      disconnect();
+      if (clientRef.current) {
+        clientRef.current.end();
+      }
     };
-  }, [disconnect]);
+  }, []);
 
   return {
     connectStatus,
@@ -183,9 +233,10 @@ const useMqttConnection = () => {
     reconnect,
     setAlertThreshold,
     setReset,
-    logout,
-    isLoggedIn,
+    disconnect,
+    resetSensorData,
+    isAnonymous,
   };
-};
+}
 
 export default useMqttConnection;

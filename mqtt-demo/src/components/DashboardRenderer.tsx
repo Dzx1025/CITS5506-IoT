@@ -29,7 +29,6 @@ interface DashboardRendererProps {
         hour: number;
         minute: number;
       };
-      alertThreshold: number;
     };
   };
   setAlertThreshold: (value: number) => void;
@@ -51,7 +50,6 @@ const DashboardRenderer: React.FC<DashboardRendererProps> = ({
         level={sensorData.infusion.level}
         rate={sensorData.infusion.rate}
         timeLeft={sensorData.infusion.timeLeft}
-        alertThreshold={sensorData.infusion.alertThreshold}
         onAlertThresholdChange={setAlertThreshold}
         onResetChange={setReset}
       />

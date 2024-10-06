@@ -30,7 +30,9 @@ This project implements a smart monitoring system for IV bags using a TTGO T-Bea
   - PubSubClient
   - HX711
 
-## Topics for MQTT
+## MQTT
+
+### Topic
 
 For patient: `/public/ivbag/patientId`:
 
@@ -46,7 +48,7 @@ For patient: `/public/ivbag/patientId`:
   "rate": 23.52,
   "timeLeft": {
     "hour": 2,
-    "minutes": 20
+    "minute": 20
   }
 }
 ```
@@ -61,6 +63,53 @@ For hospital employees: `/private/ctl/ivbag/patientId`
   "threshold": 20,
   "reset": false
 }
+```
+
+### Mosquitto Configuration
+
+**mosquitto.conf:**
+
+```conf
+pid_file /run/mosquitto/mosquitto.pid
+
+persistence true
+persistence_location /var/lib/mosquitto/
+
+log_dest file /var/log/mosquitto/mosquitto.log
+
+include_dir /etc/mosquitto/conf.d
+
+# Add
+listener 1883
+protocol mqtt
+
+listener 8080
+protocol websockets
+
+allow_anonymous true
+
+password_file /etc/mosquitto/passwd
+
+acl_file /etc/mosquitto/acl
+
+log_type all
+```
+
+**acl:**
+
+```conf
+topic readwrite public/#
+
+# Admin
+user team40
+topic readwrite #
+```
+
+**Default admin:**
+
+```conf
+Username: team40
+Passoword: 123456
 ```
 
 ## Setup Instructions

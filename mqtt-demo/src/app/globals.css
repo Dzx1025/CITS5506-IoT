@@ -18,6 +18,9 @@
     --primary-dark: #42a5f5;
     --error: #ff5252;
   }
+  .disconnected {
+    background-color: #333333;
+  }
 }
 
 body {
@@ -49,11 +52,4 @@ body {
 
 .alert {
   color: var(--error);
-}
-
-/* Dark mode specific styles */
-@media (prefers-color-scheme: dark) {
-  .disconnected {
-    background-color: #333333;
-  }
 }

@@ -8,20 +8,12 @@ import {
   ChevronUp,
   LogOut,
   Phone,
+  AlertCircle,
 } from "lucide-react";
 import useMqttConnection from "@/components/UseMqttConnection";
 import DashboardRenderer from "@/components/DashboardRenderer";
 
 const ConnectionDetails: React.FC = () => {
-  const [username, setUsername] = useState("");
-  const [password, setPassword] = useState("");
-  const [loggedInUser, setLoggedInUser] = useState("");
-  const [patientId, setPatientId] = useState<number>(
-    Number(process.env.PATIENT_ID) || 40
-  );
-  const [isPatientIdValid, setIsPatientIdValid] = useState(false);
-  const [showCredentials, setShowCredentials] = useState(false);
-
   const {
     connectStatus,
     sensorData,
@@ -29,48 +21,92 @@ const ConnectionDetails: React.FC = () => {
     reconnect,
     setAlertThreshold,
     setReset,
-    logout,
-    isLoggedIn,
+    disconnect,
+    resetSensorData,
+    isAnonymous,
   } = useMqttConnection();
 
+  const [patientId, setPatientId] = useState<number>(0);
+  const [username, setUsername] = useState<string>("");
+  const [password, setPassword] = useState<string>("");
+  const [showCredentials, setShowCredentials] = useState<boolean>(false);
+  const [error, setError] = useState<string>("");
+  const [loggedInDoctor, setLoggedInDoctor] = useState<string>("");
+
+  const isConnected = connectStatus === "Connected";
+  const isPatientIdValid = patientId !== 0;
+
   useEffect(() => {
-    setIsPatientIdValid(Number.isInteger(patientId) && patientId > 0);
-  }, [patientId]);
+    // Load saved data from localStorage
+    const savedPatientId = localStorage.getItem("patientId");
+    const savedUsername = localStorage.getItem("username");
+    const savedPassword = localStorage.getItem("password");
+
+    if (savedPatientId) setPatientId(Number(savedPatientId));
+    if (savedUsername) setUsername(savedUsername);
+    if (savedPassword) setPassword(savedPassword);
+  }, []);
+
+  useEffect(() => {
+    if (isConnected && !isAnonymous) {
+      setLoggedInDoctor(username);
+      // Save login information to localStorage
+      localStorage.setItem("username", username);
+      localStorage.setItem("password", password);
+    } else {
+      setLoggedInDoctor("");
+    }
+  }, [isConnected, isAnonymous, username, password]);
+
+  const handlePatientIdChange = (newPatientId: number) => {
+    if (newPatientId !== patientId) {
+      disconnect();
+      setPatientId(newPatientId);
+      resetSensorData();
+      localStorage.setItem("patientId", newPatientId.toString());
+    }
+  };
 
   const handleConnect = async () => {
-    if (username && password && isPatientIdValid) {
-      try {
-        await connect(username, password, patientId);
-        setLoggedInUser(username);
-        setUsername("");
-        setPassword("");
-      } catch (error) {
-        console.error("Login failed:", error);
-        // Handle login failure (e.g., show error message to user)
-      }
+    setError("");
+    const result = await connect(username, password, patientId);
+    if (!result.success) {
+      setError(result.error || "Connection failed");
+    }
+  };
+
+  const handleReconnect = async () => {
+    setError("");
+    setShowCredentials(false);
+    let result;
+    if (loggedInDoctor) {
+      // If already logged in, use the existing credentials
+      result = await connect(username, password, patientId);
+    } else {
+      // If not logged in, use reconnect (which will connect anonymously)
+      result = await reconnect(patientId);
+    }
+    if (!result.success) {
+      setError(result.error || "Reconnection failed");
     }
   };
 
   const handleLogout = () => {
-    logout();
-    setLoggedInUser(""); // Clear logged in user
-  };
-
-  const handleReconnect = () => {
-    if (isPatientIdValid) {
-      reconnect(patientId);
-    }
+    disconnect();
+    setUsername("");
+    setPassword("");
+    setLoggedInDoctor("");
+    localStorage.removeItem("username");
+    localStorage.removeItem("password");
   };
 
   const handleContact = () => {
-    // Placeholder for contact functionality
+    // Implement contact functionality
     console.log("Contact button clicked");
   };
 
-  const isConnected = connectStatus === "Connected";
   const statusColor = isConnected ? "text-green-400" : "text-red-400";
   const Icon = isConnected ? Wifi : WifiOff;
-
   const buttonClass =
     "font-bold py-2 px-4 rounded-md transition duration-300 ease-in-out text-sm";
   const activeButtonClass =
@@ -93,8 +129,8 @@ const ConnectionDetails: React.FC = () => {
             <input
               type="number"
               placeholder="Patient ID (required)"
-              value={patientId}
-              onChange={(e) => setPatientId(Number(e.target.value))}
+              value={patientId || ""}
+              onChange={(e) => handlePatientIdChange(Number(e.target.value))}
               className={`flex-grow bg-gray-800 text-white px-3 py-2 rounded ${
                 !isPatientIdValid && patientId !== 0
                   ? "border-red-500 border"
@@ -116,10 +152,10 @@ const ConnectionDetails: React.FC = () => {
           )}
         </div>
         <div className="border-t border-gray-700 pt-4 mt-4">
-          {loggedInUser ? (
+          {loggedInDoctor ? (
             <div className="flex items-center justify-between">
               <span className="text-green-400">
-                Logged in as: {loggedInUser}
+                Logged in as: {loggedInDoctor}
               </span>
               <div className="space-x-2">
                 <button
@@ -176,6 +212,12 @@ const ConnectionDetails: React.FC = () => {
                   >
                     Verify
                   </button>
+                  {error && (
+                    <div className="flex items-center text-red-500 text-sm mt-2">
+                      <AlertCircle size={16} className="mr-2" />
+                      {error}
+                    </div>
+                  )}
                 </div>
               )}
             </>
