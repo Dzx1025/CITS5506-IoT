@@ -15,8 +15,8 @@ PubSubClient mqtt_client(wifi_client);
 
 const char *mqtt_server = "test.mosquitto.org";
 const int mqtt_port = 1883;
-const char *mqtt_topic = "ivbag/40/testnum";
-const char *mqtt_threshold_topic = "ivbag/40/threshold";
+const char *mqtt_topic = "public/ivbag/40";
+const char *mqtt_threshold_topic = "private/ctl/ivbag/";
 
 // InfluxDB details
 // use 'ifconfig | grep inet' to check local internet ip
@@ -35,12 +35,19 @@ HX711 scale;
 const int DOUT = 13;
 const int HX711_SCK = 14;
 
-float calibration_factor = -7050;
+float calibration_factor = -2111.5;
 float full_bottle_weight = 500;  // Default value, can be changed via button
 bool isFullBottleSet = false;
 float lastValidWeight = full_bottle_weight;
 unsigned long lastDebounceTime = 0;
 const unsigned long debounceDelay = 500;  // 500 milliseconds debounce delay
+
+// Variables for flow rate and time left calculation
+float previousWeight = 0;
+unsigned long previousWeightTime = 0;
+float flowRate = 0;  // mL per hour
+int timeLeftHours = 999;
+int timeLeftMinutes = 999;
 
 // Pin for the button to set full bottle weight
 const int buttonPin = 2;
@@ -155,15 +162,28 @@ void loop() {
   // Read weight from sensor
   float current_weight = readWeightFromSensor();
 
-  calculateLevel(current_weight);
-  if (isFullBottleSet) {
-    publishLevelData(currentMillis);
+  // If full bottle weight is not set, display message and wait for button press
+  if (!isFullBottleSet) {
+    level = 100;
+    flowRate = 0;
+    timeLeftHours = 999;
+    timeLeftMinutes = 999;
+    Serial.println("Please set the full bottle weight by pressing the button.");
+  } else {
+    calculateLevel(current_weight);
+
+    // Calculate flow rate and time left every 3 seconds, to avoid the effect of noise
+    if (currentMillis - previousMillis >= 3000) {
+      previousMillis = currentMillis;
+      calculateFlowRate(current_weight);
+      calculateTimeLeft(current_weight, flowRate);
+    }
+
+    publishData();
   }
 
   Serial.print("current threshold:");
   Serial.println(user_threshold);
-  Serial.print("current level:");
-  Serial.println(level);
 
   // Check the weight level against the user threshold, blink when level is under threshold
   if (level < user_threshold) {
@@ -275,10 +295,7 @@ void setFullBottleWeight() {
 }
 
 void calculateLevel(float current_weight) {
-  if (!isFullBottleSet) {
-    level = 100;
-    Serial.println("Please set the full bottle weight by pressing the button.");
-  } else if (full_bottle_weight != 0) {
+  if (full_bottle_weight != 0) {
     level = (current_weight / full_bottle_weight) * 100;
     level = constrain(level, 0, 100);  // Ensure level is between 0 and 100
   } else {
@@ -286,10 +303,42 @@ void calculateLevel(float current_weight) {
   }
 }
 
-void publishLevelData(unsigned long currentMillis) {
+void calculateFlowRate(float current_weight) {
+  unsigned long currentTime = millis();
+  float weightDifference = previousWeight - current_weight;
+  float timeDifference = (currentTime - previousWeightTime) / 3600000.0;  // Convert to hours
+
+  if (previousWeight > 0) {
+    flowRate = (weightDifference / timeDifference);  // Assuming 1g = 1mL
+    flowRate = max(flowRate, 0);  // Ensure flow rate is not negative
+  } else { 
+    flowRate = 0;
+  }
+
+  previousWeight = current_weight;
+  previousWeightTime = currentTime;
+}
+
+void calculateTimeLeft(float current_weight, float flowRate) {
+  if (flowRate > 0) {
+    float remainingTimeHours = current_weight / flowRate;
+    timeLeftHours = int(remainingTimeHours);
+    timeLeftMinutes = (remainingTimeHours - timeLeftHours) * 60;
+  } else {
+    timeLeftHours = 999;
+    timeLeftMinutes = 999;
+  }
+}
+
+void publishData() {
   // Create a JSON document
   JsonDocument data;
   data["level"] = level;
+  data["rate"] = flowRate;
+  JsonObject timeLeft = data.createNestedObject("timeLeft");
+  timeLeft["hour"] = timeLeftHours;
+  timeLeft["minute"] = timeLeftMinutes;
+
   // Serialize JSON document to string
   String payload;
   serializeJson(data, payload);
@@ -298,10 +347,10 @@ void publishLevelData(unsigned long currentMillis) {
   Serial.println(payload);
   mqtt_client.publish(mqtt_topic, payload.c_str());
 
-  // Write data to 
-  if (currentMillis - lastInfluxDBWrite >= influxDBWriteInterval) {
+  // Write data to InfluxDB
+  if (millis() - lastInfluxDBWrite >= influxDBWriteInterval) {
     writeDataToInfluxDB(level);
-    lastInfluxDBWrite = currentMillis;
+    lastInfluxDBWrite = millis();
   }
 }
 
@@ -360,7 +409,13 @@ void callback(char* topic, byte* payload, unsigned int length) {
     digitalWrite(speakerLedPin, HIGH);
     delay(200);
     digitalWrite(speakerLedPin, LOW);
+  } else if (doc.containsKey("reset")) {
+    isFullBottleSet = false;
+    Serial.print("reset: true");
+    digitalWrite(speakerLedPin, HIGH);
+    delay(200);
+    digitalWrite(speakerLedPin, LOW);
   } else {
-    Serial.println("No 'threshold' field found in the message");
+    Serial.println("No 'threshold' or 'reset' field found in the message");
   }
 }
