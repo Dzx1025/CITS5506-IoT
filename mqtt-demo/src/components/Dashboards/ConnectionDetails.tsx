@@ -10,6 +10,7 @@ import {
   Phone,
   AlertCircle,
   User,
+  Loader2,
 } from "lucide-react";
 import useMqttConnection from "@/components/UseMqttConnection";
 import DashboardRenderer from "@/components/DashboardRenderer";
@@ -33,8 +34,10 @@ const ConnectionDetails: React.FC = () => {
   const [showCredentials, setShowCredentials] = useState<boolean>(false);
   const [error, setError] = useState<string>("");
   const [loggedInDoctor, setLoggedInDoctor] = useState<string>("");
+  const [isReconnecting, setIsReconnecting] = useState<boolean>(false);
 
   const isConnected = connectStatus === "Connected";
+  const isConnecting = connectStatus === "Connecting";
   const isPatientIdValid = patientId !== 0;
 
   useEffect(() => {
@@ -79,16 +82,21 @@ const ConnectionDetails: React.FC = () => {
   const handleReconnect = async () => {
     setError("");
     setShowCredentials(false);
+    setIsReconnecting(true);
     let result;
-    if (loggedInDoctor) {
-      // If already logged in, use the existing credentials
-      result = await connect(username, password, patientId);
-    } else {
-      // If not logged in, use reconnect (which will connect anonymously)
-      result = await reconnect(patientId);
-    }
-    if (!result.success) {
-      setError(result.error || "Reconnection failed");
+    try {
+      if (loggedInDoctor) {
+        // If already logged in, use the existing credentials
+        result = await connect(username, password, patientId);
+      } else {
+        // If not logged in, use reconnect (which will connect anonymously)
+        result = await reconnect(patientId);
+      }
+      if (!result.success) {
+        setError(result.error || "Reconnection failed");
+      }
+    } finally {
+      setIsReconnecting(false);
     }
   };
 
@@ -106,7 +114,19 @@ const ConnectionDetails: React.FC = () => {
     console.log("Contact button clicked");
   };
 
-  const Icon = isConnected ? Wifi : WifiOff;
+  const getConnectionIcon = () => {
+    if (isConnected) return Wifi;
+    if (isConnecting) return Wifi;
+    return WifiOff;
+  };
+
+  const getConnectionClass = () => {
+    if (isConnected) return "text-connected";
+    if (isConnecting) return "text-connecting";
+    return "text-disconnected";
+  };
+
+  const Icon = getConnectionIcon();
 
   return (
     <div className="space-y-6 p-4 max-w-md mx-auto">
@@ -119,16 +139,8 @@ const ConnectionDetails: React.FC = () => {
       <div className="bg-card-background text-foreground p-4 rounded-lg shadow-md border border-gray-200 dark:border-gray-700">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center">
-            <Icon
-              className={`w-6 h-6 mr-2 ${
-                isConnected ? "text-success" : "text-error"
-              }`}
-            />
-            <span
-              className={`font-medium ${
-                isConnected ? "text-success" : "text-error"
-              }`}
-            >
+            <Icon className={`w-6 h-6 mr-2 ${getConnectionClass()}`} />
+            <span className={`font-medium ${getConnectionClass()}`}>
               {connectStatus}
             </span>
           </div>
@@ -160,17 +172,23 @@ const ConnectionDetails: React.FC = () => {
               onChange={(e) => handlePatientIdChange(Number(e.target.value))}
               className="w-full px-4 py-2 bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md text-foreground focus:ring-primary focus:border-primary transition-colors duration-300"
             />
-            <button
-              onClick={handleReconnect}
-              disabled={!isPatientIdValid}
-              className={`px-4 py-2 rounded-md transition-colors duration-300 ${
-                isPatientIdValid
-                  ? "bg-primary text-white hover:bg-primary-dark"
-                  : "bg-gray-500 text-gray-300 dark:bg-gray-700 dark:text-gray-500 cursor-not-allowed"
-              }`}
-            >
-              Reconnect
-            </button>
+            {isReconnecting ? (
+              <div className="flex items-center justify-center px-4 py-2 bg-gray-200 dark:bg-gray-700 rounded-md">
+                <Loader2 className="w-5 h-5 animate-spin text-primary" />
+              </div>
+            ) : (
+              <button
+                onClick={handleReconnect}
+                disabled={!isPatientIdValid}
+                className={`px-4 py-2 rounded-md transition-colors duration-300 ${
+                  isPatientIdValid
+                    ? "bg-primary text-white hover:bg-primary-dark"
+                    : "bg-gray-500 text-gray-300 dark:bg-gray-700 dark:text-gray-500 cursor-not-allowed"
+                }`}
+              >
+                Reconnect
+              </button>
+            )}
           </div>
           {!isPatientIdValid && patientId !== 0 && (
             <p className="text-error text-xs mt-1">Patient ID is required</p>

@@ -43,6 +43,18 @@ body {
     0 2px 4px -1px rgba(0, 0, 0, 0.06);
 }
 
+@layer utilities {
+  .text-connected {
+    color: var(--success);
+  }
+  .text-disconnected {
+    color: var(--error);
+  }
+  .text-connecting {
+    color: var(--warning);
+  }
+}
+
 .connected {
   color: var(--success);
 }
