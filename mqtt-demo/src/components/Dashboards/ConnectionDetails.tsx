@@ -28,17 +28,18 @@ const ConnectionDetails: React.FC = () => {
     isAnonymous,
   } = useMqttConnection();
 
-  const [patientId, setPatientId] = useState<number>(0);
+  const [patientId, setPatientId] = useState<string>("");
   const [username, setUsername] = useState<string>("");
   const [password, setPassword] = useState<string>("");
   const [showCredentials, setShowCredentials] = useState<boolean>(false);
   const [error, setError] = useState<string>("");
   const [loggedInDoctor, setLoggedInDoctor] = useState<string>("");
   const [isReconnecting, setIsReconnecting] = useState<boolean>(false);
+  const [patientIdFeedback, setPatientIdFeedback] = useState<string>("");
 
   const isConnected = connectStatus === "Connected";
   const isConnecting = connectStatus === "Connecting";
-  const isPatientIdValid = patientId !== 0;
+  const isPatientIdValid = /^\d{1,6}$/.test(patientId);
 
   useEffect(() => {
     // Load saved data from localStorage
@@ -46,7 +47,7 @@ const ConnectionDetails: React.FC = () => {
     const savedUsername = localStorage.getItem("username");
     const savedPassword = localStorage.getItem("password");
 
-    if (savedPatientId) setPatientId(Number(savedPatientId));
+    if (savedPatientId) setPatientId(savedPatientId);
     if (savedUsername) setUsername(savedUsername);
     if (savedPassword) setPassword(savedPassword);
   }, []);
@@ -62,18 +63,27 @@ const ConnectionDetails: React.FC = () => {
     }
   }, [isConnected, isAnonymous, username, password]);
 
-  const handlePatientIdChange = (newPatientId: number) => {
+  const handlePatientIdChange = (newPatientId: string) => {
     if (newPatientId !== patientId) {
-      disconnect();
+      if (newPatientId === "") {
+        setPatientIdFeedback("");
+      } else if (!/^\d{1,6}$/.test(newPatientId)) {
+        setPatientIdFeedback(
+          "Patient ID must be a number between 1 and 999999"
+        );
+      } else {
+        setPatientIdFeedback("Valid Patient ID");
+        disconnect();
+        resetSensorData();
+        localStorage.setItem("patientId", newPatientId);
+      }
       setPatientId(newPatientId);
-      resetSensorData();
-      localStorage.setItem("patientId", newPatientId.toString());
     }
   };
 
   const handleConnect = async () => {
     setError("");
-    const result = await connect(username, password, patientId);
+    const result = await connect(username, password, parseInt(patientId));
     if (!result.success) {
       setError(result.error || "Connection failed");
     }
@@ -87,10 +97,10 @@ const ConnectionDetails: React.FC = () => {
     try {
       if (loggedInDoctor) {
         // If already logged in, use the existing credentials
-        result = await connect(username, password, patientId);
+        result = await connect(username, password, parseInt(patientId));
       } else {
         // If not logged in, use reconnect (which will connect anonymously)
-        result = await reconnect(patientId);
+        result = await reconnect(parseInt(patientId));
       }
       if (!result.success) {
         setError(result.error || "Reconnection failed");
@@ -166,11 +176,15 @@ const ConnectionDetails: React.FC = () => {
         <div className="space-y-2 mb-4">
           <div className="flex space-x-2">
             <input
-              type="number"
+              type="text"
               placeholder="Patient ID (required)"
-              value={patientId || ""}
-              onChange={(e) => handlePatientIdChange(Number(e.target.value))}
-              className="w-full px-4 py-2 bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md text-foreground focus:ring-primary focus:border-primary transition-colors duration-300"
+              value={patientId}
+              onChange={(e) => handlePatientIdChange(e.target.value)}
+              className={`w-full px-4 py-2 bg-gray-100 dark:bg-gray-800 border rounded-md text-foreground focus:ring-primary focus:border-primary transition-colors duration-300 ${
+                isPatientIdValid
+                  ? "border-green-500"
+                  : "border-gray-300 dark:border-gray-600"
+              }`}
             />
             {isReconnecting ? (
               <div className="flex items-center justify-center px-4 py-2 bg-gray-200 dark:bg-gray-700 rounded-md">
@@ -190,8 +204,14 @@ const ConnectionDetails: React.FC = () => {
               </button>
             )}
           </div>
-          {!isPatientIdValid && patientId !== 0 && (
-            <p className="text-error text-xs mt-1">Patient ID is required</p>
+          {patientIdFeedback && (
+            <p
+              className={`text-xs mt-1 ${
+                isPatientIdValid ? "text-green-500" : "text-error"
+              }`}
+            >
+              {patientIdFeedback}
+            </p>
           )}
         </div>
         <div className="border-t border-gray-300 dark:border-gray-700 pt-4 mt-4">

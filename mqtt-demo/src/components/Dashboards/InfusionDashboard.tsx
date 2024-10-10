@@ -24,7 +24,7 @@ const InfusionDashboard: React.FC<InfusionDashboardProps> = ({
   onAlertThresholdChange,
   onResetChange,
 }) => {
-  const [localAlertThreshold, setLocalAlertThreshold] = useState(15);
+  const [localAlertThreshold, setLocalAlertThreshold] = useState<number>(15);
   const isConnected = connectStatus === "Connected";
   const isLowWaterLevel = waterLevel <= localAlertThreshold;
   const waterLevelClass = isConnected
@@ -113,16 +113,25 @@ const InfusionDashboard: React.FC<InfusionDashboardProps> = ({
           htmlFor="alertThreshold"
           className="block text-sm font-medium text-gray-600 dark:text-gray-300 mb-2"
         >
-          Alert Threshold (%)
+          Alert Threshold: {localAlertThreshold}%
         </label>
         <input
-          type="number"
+          type="range"
           id="alertThreshold"
+          min="1"
+          max="99"
           value={localAlertThreshold}
           onChange={(e) => handleAlertThresholdChange(Number(e.target.value))}
-          className="w-full px-4 py-2 bg-gray-100 dark:bg-gray-800 border-2 border-gray-300 dark:border-gray-600 rounded-md text-foreground focus:ring-primary focus:border-primary transition-colors duration-300"
+          className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700"
           disabled={!isConnected}
         />
+        <div className="flex justify-between text-xs text-gray-600 dark:text-gray-400 mt-1">
+          <span>1%</span>
+          <span>25%</span>
+          <span>50%</span>
+          <span>75%</span>
+          <span>99%</span>
+        </div>
       </div>
 
       {isLowWaterLevel && (
