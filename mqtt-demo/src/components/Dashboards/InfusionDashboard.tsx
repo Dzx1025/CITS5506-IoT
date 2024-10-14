@@ -34,10 +34,35 @@ const InfusionDashboard: React.FC<InfusionDashboardProps> = ({
     : "bg-gray-500 dark:bg-gray-700";
 
   const previousWaterLevelRef = useRef(waterLevel);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  useEffect(() => {
+    audioRef.current = new Audio(
+      "/sound/digital-watch-alarm-tomas-herudek-1-00-13.mp3"
+    );
+  }, []);
+
+  const playSound = () => {
+    if (audioRef.current) {
+      audioRef.current
+        .play()
+        .catch((error) => console.error("Error playing sound:", error));
+    }
+  };
+
+  const stopSound = () => {
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.currentTime = 0;
+    }
+  };
 
   useEffect(() => {
     if (isLowWaterLevel) {
       alertNotify(`Water level is low: ${waterLevel}%`);
+      playSound();
+    } else {
+      stopSound();
     }
     previousWaterLevelRef.current = waterLevel;
   }, [waterLevel, isLowWaterLevel]);
@@ -50,6 +75,7 @@ const InfusionDashboard: React.FC<InfusionDashboardProps> = ({
   };
 
   const handleResetChange = () => {
+    stopSound();
     if (onResetChange) {
       onResetChange(true);
     }
