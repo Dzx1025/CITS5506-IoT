@@ -13,17 +13,16 @@ WiFiClient wifi_client;
 // MQTT broker details
 PubSubClient mqtt_client(wifi_client);
 
-const char *mqtt_server = "test.mosquitto.org";
+// use 'ifconfig | grep inet' to check local internet ip
+const char *mqtt_server = "172.20.10.4";
 const int mqtt_port = 1883;
 const char *mqtt_topic = "public/ivbag/40";
-const char *mqtt_threshold_topic = "private/ctl/ivbag/";
+const char *mqtt_threshold_topic = "private/ctl/ivbag/40";
+const char *mqtt_username = "*******";
+const char *mqtt_password = "*******";
 
 // InfluxDB details
-// use 'ifconfig | grep inet' to check local internet ip
-const char *influxdb_url = "http://192.168.1.5:8086";
-// const char *influxdb_db_name = "your_database";
-// const char *influxdb_user = "your_username";
-// const char *influxdb_password = "your_password";
+const char *influxdb_url = "http://172.20.10.4:8086";
 const char *influxdb_org = "your_org";
 const char *influxdb_bucket = "your_database";
 const char *influxdb_token = "your_token";
@@ -45,9 +44,20 @@ const unsigned long debounceDelay = 500;  // 500 milliseconds debounce delay
 // Variables for flow rate and time left calculation
 float previousWeight = 0;
 unsigned long previousWeightTime = 0;
+unsigned long lastCalculationTime = 0;
+const unsigned long calculationInterval = 5000; // 5s
+float weightSum = 0;
+int weightCount = 0;
+float averageWeight = 0;
 float flowRate = 0;  // mL per hour
 int timeLeftHours = 999;
 int timeLeftMinutes = 999;
+
+// Variables for WMA flow rate calculation
+const int WMA_WINDOW_SIZE = 6;
+float flowRateHistory[WMA_WINDOW_SIZE];
+int historyIndex = 0;
+
 
 // Pin for the button to set full bottle weight
 const int buttonPin = 2;
@@ -70,6 +80,7 @@ const long interval = 500;  // Interval at which to blink (milliseconds)
 int ledState = LOW;
 
 int user_threshold = 15;  // Default threshold
+int previous_threshold = 15; 
 
 unsigned long lastInfluxDBWrite = 0;
 const unsigned long influxDBWriteInterval = 5000; // 5 seconds
@@ -96,16 +107,21 @@ void setup() {
   setup_wifi();
 
   mqtt_client.setServer(mqtt_server, mqtt_port);
-  mqtt_client.setCallback(callback);  // Set the callback function for incoming MQTT messages
-
-  if (mqtt_client.connected()) {
-    Serial.println("Connected to MQTT Broker!");
-    mqtt_client.subscribe(mqtt_threshold_topic);
+  mqtt_client.setCallback(callback);  // Set the callback function for incoming MQTT 
+  
+  if (mqtt_client.connect("ESP32Client", mqtt_username, mqtt_password)) {
+  Serial.println("Connected to MQTT Broker!");
+  mqtt_client.subscribe(mqtt_threshold_topic);
   } else {
     Serial.println("Failed to connect to MQTT Broker.");
   }
 
   setupInfluxDB();
+
+  // initialize flow rate history
+  for (int i = 0; i < WMA_WINDOW_SIZE; i++) {
+    flowRateHistory[i] = 0;
+  }
 }
 
 void loop() {
@@ -170,13 +186,21 @@ void loop() {
     timeLeftMinutes = 999;
     Serial.println("Please set the full bottle weight by pressing the button.");
   } else {
+    weightSum += current_weight;
+    weightCount++;
+
     calculateLevel(current_weight);
 
     // Calculate flow rate and time left every 3 seconds, to avoid the effect of noise
-    if (currentMillis - previousMillis >= 3000) {
-      previousMillis = currentMillis;
-      calculateFlowRate(current_weight);
-      calculateTimeLeft(current_weight, flowRate);
+    if (currentMillis - lastCalculationTime >= calculationInterval) {
+      averageWeight = weightSum / weightCount;
+      calculateFlowRate(averageWeight);
+      calculateTimeLeft(averageWeight, flowRate);
+
+      weightSum = 0;
+      weightCount = 0;
+
+      lastCalculationTime = currentMillis;
     }
 
     publishData();
@@ -186,21 +210,18 @@ void loop() {
   Serial.println(user_threshold);
 
   // Check the weight level against the user threshold, blink when level is under threshold
-  if (level < user_threshold) {
+  if (level <= user_threshold) {
     for (int i = 0; i < 2; i++) {
     digitalWrite(alertLedPin1, HIGH);
     digitalWrite(alertLedPin2, LOW);
-    digitalWrite(speakerLedPin, LOW);
     delay(250);
     digitalWrite(alertLedPin1, LOW);
     digitalWrite(alertLedPin2, HIGH);
-    digitalWrite(speakerLedPin, HIGH);
     delay(250);
     }
   } else {
     digitalWrite(alertLedPin1, LOW);
     digitalWrite(alertLedPin2, LOW);
-    digitalWrite(speakerLedPin, LOW);
     delay(1000);
   }
 
@@ -232,7 +253,7 @@ void reconnect() {
     Serial.print("Attempting MQTT connection...");
     String clientId = "TTGO-TBeam-";
     clientId += String(random(0xffff), HEX);
-    if (mqtt_client.connect(clientId.c_str())) {
+    if (mqtt_client.connect(clientId.c_str(), mqtt_username, mqtt_password)) {
       Serial.println("connected");
 
       // Once connected, subscribe to the topic
@@ -254,7 +275,6 @@ void reconnect() {
 
 void setupInfluxDB() {
   Serial.println("Setting up InfluxDB connection...");
-  // db_client.setConnectionParamsV1(influxdb_url, influxdb_db_name, influxdb_user, influxdb_password);
   
 
   if (db_client.validateConnection()) {
@@ -303,27 +323,56 @@ void calculateLevel(float current_weight) {
   }
 }
 
-void calculateFlowRate(float current_weight) {
-  unsigned long currentTime = millis();
-  float weightDifference = previousWeight - current_weight;
-  float timeDifference = (currentTime - previousWeightTime) / 3600000.0;  // Convert to hours
+void calculateFlowRate(float averageWeight) {
+  static float previousAverageWeight = 0;
+  static unsigned long previousCalculationTime = 0;
 
-  if (previousWeight > 0) {
-    flowRate = (weightDifference / timeDifference);  // Assuming 1g = 1mL
-    flowRate = max(flowRate, 0);  // Ensure flow rate is not negative
-  } else { 
+  unsigned long currentTime = millis();
+  float timeDifference = (currentTime - previousCalculationTime) / 3600000.0;  // Convert to hours
+
+  float instantFlowRate = 0;
+  if (previousAverageWeight > 0 && timeDifference > 0) {
+    instantFlowRate = (previousAverageWeight - averageWeight) / timeDifference; // Assuming 1g = 1mL
+    instantFlowRate = max(instantFlowRate, 0.0f);  // Ensure flow rate is not negative
+  }
+
+  updateFlowRateHistory(instantFlowRate);
+
+  // calculate WMA
+  float totalWeight = 0;
+  float weightedFlowRate = 0;
+
+  for (int i = 0; i < WMA_WINDOW_SIZE; i++) {
+    int index = (historyIndex - i + WMA_WINDOW_SIZE) % WMA_WINDOW_SIZE;
+    float weight = WMA_WINDOW_SIZE - i;
+    weightedFlowRate += flowRateHistory[index] * weight;
+    totalWeight += weight;
+  }
+
+  if (totalWeight > 0) {
+    flowRate = weightedFlowRate / totalWeight;
+  } else {
     flowRate = 0;
   }
 
-  previousWeight = current_weight;
-  previousWeightTime = currentTime;
+  previousAverageWeight = averageWeight;
+  previousCalculationTime = currentTime;
+  Serial.print("Updated flow rate (WMA): ");
+  Serial.println(flowRate);
 }
 
-void calculateTimeLeft(float current_weight, float flowRate) {
+void updateFlowRateHistory(float instantFlowRate) {
+  flowRateHistory[historyIndex] = instantFlowRate;
+  historyIndex = (historyIndex + 1) % WMA_WINDOW_SIZE;
+}
+
+void calculateTimeLeft(float averageWeight, float flowRate) {
   if (flowRate > 0) {
-    float remainingTimeHours = current_weight / flowRate;
+    float remainWeight = averageWeight - full_bottle_weight * user_threshold / 100;
+    float remainingTimeHours = remainWeight / flowRate;
     timeLeftHours = int(remainingTimeHours);
     timeLeftMinutes = (remainingTimeHours - timeLeftHours) * 60;
+    Serial.println("Updated time left");
   } else {
     timeLeftHours = 999;
     timeLeftMinutes = 999;
@@ -358,11 +407,8 @@ void writeDataToInfluxDB(int level) {
   Serial.println("Preparing to write data to InfluxDB...");
 
   Point sensorData("monitor variables");
-  // Serial.println("Point created with measurement 'monitor variables'");
 
   sensorData.addField("weight", level);
-  // Serial.print("Added field 'weight' with value: ");
-  // Serial.println((float)level);
 
   if (db_client.writePoint(sensorData)) {
       Serial.println("Data written to InfluxDB");
@@ -403,18 +449,24 @@ void callback(char* topic, byte* payload, unsigned int length) {
 
   // Extract the threshold value from the JSON
   if (doc.containsKey("threshold")) {
-    user_threshold = doc["threshold"];
-    Serial.print("User set threshold: ");
-    Serial.println(user_threshold);
-    digitalWrite(speakerLedPin, HIGH);
-    delay(200);
-    digitalWrite(speakerLedPin, LOW);
+    int new_threshold = doc["threshold"];
+    if (new_threshold != previous_threshold) {
+      user_threshold = new_threshold;
+      previous_threshold = new_threshold;
+      Serial.print("User set new threshold: ");
+      Serial.println(user_threshold);
+      digitalWrite(speakerLedPin, HIGH);
+      delay(1000);
+      digitalWrite(speakerLedPin, LOW);
+    }
   } else if (doc.containsKey("reset")) {
-    isFullBottleSet = false;
-    Serial.print("reset: true");
-    digitalWrite(speakerLedPin, HIGH);
-    delay(200);
-    digitalWrite(speakerLedPin, LOW);
+    if (isFullBottleSet == true) {
+      isFullBottleSet = false;
+      Serial.print("reset: true");
+      digitalWrite(speakerLedPin, HIGH);
+      delay(1000);
+      digitalWrite(speakerLedPin, LOW);
+    }
   } else {
     Serial.println("No 'threshold' or 'reset' field found in the message");
   }
