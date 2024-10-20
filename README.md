@@ -2,15 +2,18 @@
 
 ## Overview
 
-This project implements a smart monitoring system for IV bags using a TTGO T-Beam v1.2 ESP32, a weight sensor (HX711), and a 5V non-contact liquid level sensor. The system provides real-time monitoring of IV fluid volume, flow rate, and status through a web interface using WebSocket technology.
+This project implements a smart monitoring system for IV bags using a TTGO T-Beam v1.2 ESP32, a weight sensor (HX711), and various LEDs for status indication. The system provides real-time monitoring of IV fluid volume, flow rate, and status through MQTT and InfluxDB, with data visualization capabilities.
 
 ## Features
 
 - Real-time monitoring of IV bag weight and volume
-- Flow rate calculation
+- Flow rate calculation using Weighted Moving Average (WMA)
+- MQTT integration for real-time data publishing and control
+- InfluxDB integration for data storage and visualization
+- Multiple LED indicators for system status
+- Customizable alert thresholds
+- Wi-Fi connectivity for data transmission
 - Web interface for easy monitoring
-- Wi-Fi access point for connection
-- Real-time data updates using WebSocket
 
 ## Requirements
 
@@ -19,7 +22,7 @@ This project implements a smart monitoring system for IV bags using a TTGO T-Bea
 - TTGO T-Beam v1.2 ESP32 (ESP32-based development board)
 - HX711 Load Cell Amplifier (for weight measurement)
 - Load Cell (to measure the weight of the IV bag)
-- LED (indicates when the full weight is set)
+- LEDs (5 different colors for various status indications)
 - Push Button (to set the full bag weight)
 
 ### Software Requirements
@@ -29,8 +32,10 @@ This project implements a smart monitoring system for IV bags using a TTGO T-Bea
   - WiFi
   - PubSubClient
   - HX711
+  - ArduinoJson
+  - InfluxDBClient
 
-## MQTT
+## MQTT Configuration
 
 ### Topic
 
@@ -116,50 +121,43 @@ Passoword: 123456
 
 ### Hardware Setup
 
-1. Hardware Connections:
+1. Connect the HX711 to the TTGO T-Beam:
+   - DOUT pin to GPIO 13
+  - SCK pin to GPIO 14
 
-   - Connect the HX711 to the TTGO T-Beam:
-     - DOUT pin to GPIO 13
-     - SCK pin to GPIO 14
-   - Connect the a LED to GPIO 25 with a resistance.
-   - Connect the push button to GPIO 2.
+2. Connect the LEDs:
+   - Notification LED: GPIO 25
+   - Weight LED: GPIO 32
+   - Network LED: GPIO 33
+   - Communication LED: GPIO 15
+   - Alert LEDs: GPIO 21 and 22
 
-2. Software Setup:
+3. Connect the push button to GPIO 2
 
-   - Install the required libraries in the Arduino IDE:
-   - PubSubClient.h for MQTT communication
-   - HX711.h for weight sensor interaction
-   - Modify the Wi-Fi SSID, password in the code to match the environment.
-   - Upload the code to the TTGO T-Beam ESP32 using Arduino IDE.
+### Software Setup:
 
-### Frontend Setup
-
-- Frontend: The web interface displays real-time IV fluid status and updates.
+1. Install the required libraries in the Arduino IDE
+2. Modify the Wi-Fi SSID, password, MQTT broker details, and InfluxDB details in the code
+3. Upload the code to the TTGO T-Beam ESP32 using Arduino IDE
 
 ## Usage Instructions
-
 1. Power on the ESP32.
-2. When the bag is initially full, set the full IV bag weight by holding down the push button until the LED lights up.
-3. Monitor the IV bag through the provided web interface.
+2. Wait for the device to connect to Wi-Fi (Network LED will stop blinking).
+3. When the bag is initially full, set the full IV bag weight by pressing the push button (Weight LED will stop blinking).
+4. Monitor the IV bag status through MQTT messages and InfluxDB visualizations.
+5. Use the MQTT control topic to adjust alert thresholds or reset the system.
 
-## TODO
+## InfluxDB Visualization
+To query and visualize data in the InfluxDB Web UI, use the following Flux query:
 
-- Speaker Alarm: Design and implement alarm sounds when low volume.
-  - Implement alert system for critical volume levels or flow rate changes
-  - Add speaker alarm for audible alerts
+```bash
+from(bucket: "iv_bag")
+  |> range(start: -5m)
+  |> filter(fn: (r) => r._measurement == "monitor variables")
+  |> filter(fn: (r) => r._field == "weight")
+```
+Adjust the time range and add more visualizations as needed in the InfluxDB Web UI.
 
-## Possible Future Improvements
-
-- Personalized Threshold Settings
-
-  - Develop a user interface for customizing level thresholds
-
-- Data Management System
-
-  - Select and integrate a suitable database system (e.g., SQLite for local storage or a cloud-based solution) to store IV bag monitoring data
-  - Implement data logging functionality to periodically save monitoring data for viewing and analyzing historical data
-
-- Patient Management System
-  - Implement a tagging system to associate IV bags with patient information
-  - Design a data structure for storing patient and IV bag information
-  - Create a user interface for adding, editing, and viewing patient information
+## Troubleshooting
+- If the communication LED is blinking, check your MQTT and InfluxDB connections
+- If weight readings seem incorrect, you may need to adjust the calibration_factor in the code

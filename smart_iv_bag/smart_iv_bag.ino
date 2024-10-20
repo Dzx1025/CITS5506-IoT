@@ -1,27 +1,45 @@
+/*
+ * IV Bag Monitor
+ * 
+ * This project uses an ESP32 with a HX711 load cell amplifier to monitor the weight
+ * of an IV bag. It calculates the remaining fluid level, flow rate, and estimated
+ * time left. The data is published via MQTT and stored in InfluxDB for monitoring
+ * and analysis.
+ * 
+ * Key Features:
+ * - Weight measurement using HX711 and load cell
+ * - Wi-Fi connectivity
+ * - MQTT publishing for real-time data transmission
+ * - InfluxDB integration for data storage
+ * - Flow rate calculation using Weighted Moving Average
+ * - Estimated time remaining calculation
+ * - LED indicators for various states
+ * - Button interface for setting full bottle weight
+ * 
+ */
+
 #include <ArduinoJson.h>
 #include <HX711.h>
 #include <InfluxDbClient.h>
 #include <PubSubClient.h>
 #include <WiFi.h>
 
-// Wi-Fi settings
-const char *ssid = "*******";
-const char *password = "********";
+// Network Settings
+const char *ssid = "*******";             // Wi-Fi SSID
+const char *password = "********";        // Wi-Fi password
 
 WiFiClient wifi_client;
-
-// MQTT broker details
 PubSubClient mqtt_client(wifi_client);
 
-// use 'ifconfig | grep inet' to check local internet ip
-const char *mqtt_server = "172.20.10.4";
-const int mqtt_port = 1883;
+// MQTT Configuration
+const char *mqtt_server = "172.20.10.4";  // MQTT broker IP (use 'ifconfig | grep inet' to check local IP)
+const int mqtt_port = 1883;               // MQTT broker port
 const char *mqtt_topic = "public/ivbag/40";
 const char *mqtt_threshold_topic = "private/ctl/ivbag/40";
-const char *mqtt_username = "*******";
-const char *mqtt_password = "*******";
+const char *mqtt_username = "*******";    // MQTT username
+const char *mqtt_password = "*******";    // MQTT password
 
-// InfluxDB details
+// InfluxDB Configuration
 const char *influxdb_url = "http://172.20.10.4:8086";
 const char *influxdb_org = "your_org";
 const char *influxdb_bucket = "your_database";
@@ -29,61 +47,61 @@ const char *influxdb_token = "your_token";
 
 InfluxDBClient db_client(influxdb_url, influxdb_org, influxdb_bucket, influxdb_token);
 
-// HX711 settings
+// HX711 Load Cell Configuration
 HX711 scale;
-const int DOUT = 13;
-const int HX711_SCK = 14;
+const int DOUT = 13;                      // HX711 data pin
+const int HX711_SCK = 14;                 // HX711 clock pin
+float calibration_factor = -2111.5;       // Calibration factor for the load cell
 
-float calibration_factor = -2111.5;
-float full_bottle_weight = 500;  // Default value, can be changed via button
-bool isFullBottleSet = false;
+// IV Bag Measurement Variables
+float full_bottle_weight = 500;           // Initial full bottle weight (grams)
+bool isFullBottleSet = false;             // Flag to indicate if full weight has been set
 float lastValidWeight = full_bottle_weight;
-unsigned long lastDebounceTime = 0;
-const unsigned long debounceDelay = 500;  // 500 milliseconds debounce delay
+int level = 100;                          // Current IV bag level (percentage)
 
-// Variables for flow rate and time left calculation
+// Button and Debounce Variables
+const int buttonPin = 2;                  // Button pin
+int buttonState = 0;
+unsigned long lastDebounceTime = 0;
+const unsigned long debounceDelay = 500;  // Debounce delay in milliseconds
+
+// Flow Rate and Time Left Calculation Variables
 float previousWeight = 0;
 unsigned long previousWeightTime = 0;
 unsigned long lastCalculationTime = 0;
-const unsigned long calculationInterval = 5000; // 5s
+const unsigned long calculationInterval = 5000;  // Calculation interval in milliseconds
 float weightSum = 0;
 int weightCount = 0;
 float averageWeight = 0;
-float flowRate = 0;  // mL per hour
+float flowRate = 0;                       // Flow rate in mL per hour
 int timeLeftHours = 999;
 int timeLeftMinutes = 999;
 
-// Variables for WMA flow rate calculation
+// Weighted Moving Average (WMA) Variables for Flow Rate
 const int WMA_WINDOW_SIZE = 6;
 float flowRateHistory[WMA_WINDOW_SIZE];
 int historyIndex = 0;
 
-
-// Pin for the button to set full bottle weight
-const int buttonPin = 2;
-int buttonState = 0;
-
-// Pin for the LED
+// LED Pin Assignments
 const int speakerLedPin = 25;
-const int weightLedPin = 32;  // LED for full weight setting
-const int networkLedPin = 33; // LED for network connection status
+const int weightLedPin = 32;              // LED for full weight setting
+const int networkLedPin = 33;             // LED for network connection status
 const int communicationLedPin = 15;
 const int alertLedPin1 = 21;
 const int alertLedPin2 = 22;
 
-// Level of the IV bag
-int level = 100;
-
-// Variables for LED blinking
+// LED Blinking Variables
 unsigned long previousMillis = 0;
-const long interval = 500;  // Interval at which to blink (milliseconds)
+const long interval = 500;                // LED blink interval in milliseconds
 int ledState = LOW;
 
-int user_threshold = 15;  // Default threshold
-int previous_threshold = 15; 
+// Threshold Variables
+int user_threshold = 15;                  // Default alert threshold (percentage)
+int previous_threshold = 15;              // Previous threshold for preventing duplicate alerts
 
+// InfluxDB Write Interval
 unsigned long lastInfluxDBWrite = 0;
-const unsigned long influxDBWriteInterval = 5000; // 5 seconds
+const unsigned long influxDBWriteInterval = 5000;  // InfluxDB write interval in milliseconds
 
 void setup() {
   Serial.begin(115200);
@@ -106,8 +124,9 @@ void setup() {
 
   setup_wifi();
 
+  // Set up MQTT connection and callback function to handle messages
   mqtt_client.setServer(mqtt_server, mqtt_port);
-  mqtt_client.setCallback(callback);  // Set the callback function for incoming MQTT 
+  mqtt_client.setCallback(callback);
   
   if (mqtt_client.connect("ESP32Client", mqtt_username, mqtt_password)) {
   Serial.println("Connected to MQTT Broker!");
@@ -118,7 +137,7 @@ void setup() {
 
   setupInfluxDB();
 
-  // initialize flow rate history
+  // initialize flow rate history for Weighted Moving Average calculation
   for (int i = 0; i < WMA_WINDOW_SIZE; i++) {
     flowRateHistory[i] = 0;
   }
@@ -227,7 +246,12 @@ void loop() {
 
 }
 
-// Function to connect to Wi-Fi
+/*
+ * Setup Wi-Fi Connection
+ * 
+ * This function initializes the Wi-Fi connection using the provided SSID and password.
+ * It prints the connection status and IP address to the serial monitor.
+ */
 void setup_wifi() {
   delay(10);
   Serial.println();
@@ -247,7 +271,12 @@ void setup_wifi() {
   Serial.println(WiFi.localIP());
 }
 
-// Function to reconnect to MQTT broker if the connection is lost
+/*
+ * Reconnect to MQTT Broker
+ * 
+ * This function attempts to reconnect to the MQTT broker if the connection is lost.
+ * It uses a random client ID and subscribes to the threshold topic upon successful connection.
+ */
 void reconnect() {
   while (!mqtt_client.connected()) {
     Serial.print("Attempting MQTT connection...");
@@ -273,6 +302,12 @@ void reconnect() {
   }
 }
 
+/*
+ * Set up InfluxDB Connection
+ * 
+ * This function initializes the connection to the InfluxDB server.
+ * It attempts to validate the connection and prints the status to the serial monitor.
+ */
 void setupInfluxDB() {
   Serial.println("Setting up InfluxDB connection...");
   
@@ -286,10 +321,25 @@ void setupInfluxDB() {
   }
 }
 
+/*
+ * Check Button Press
+ * 
+ * This function checks if the button connected to buttonPin is pressed.
+ * 
+ * @return true if the button is pressed (LOW state), false otherwise
+ */
 bool isButtonPressed() {
   return digitalRead(buttonPin) == LOW;
 }
 
+/*
+ * Read Weight from Sensor
+ * 
+ * This function reads the weight from the HX711 sensor with debounce logic.
+ * It updates the lastValidWeight if a new reading is taken.
+ * 
+ * @return The current weight reading or the last valid weight if debounce time hasn't elapsed
+ */
 float readWeightFromSensor() {
   unsigned long currentTime = millis();
   if (currentTime - lastDebounceTime > debounceDelay) {
@@ -303,6 +353,13 @@ float readWeightFromSensor() {
   return lastValidWeight;
 }
 
+
+/*
+ * Set Full Bottle Weight
+ * 
+ * This function sets the weight of a full IV bag. It reads the current weight,
+ * updates the full_bottle_weight variable, and provides visual feedback via LED.
+ */
 void setFullBottleWeight() {
   full_bottle_weight = readWeightFromSensor();
   isFullBottleSet = true;
@@ -314,6 +371,14 @@ void setFullBottleWeight() {
   digitalWrite(speakerLedPin, LOW);
 }
 
+/*
+ * Calculate Fluid Level
+ * 
+ * This function calculates the remaining fluid level as a percentage
+ * based on the current weight and the full bottle weight.
+ * 
+ * @param current_weight The current weight reading from the sensor
+ */
 void calculateLevel(float current_weight) {
   if (full_bottle_weight != 0) {
     level = (current_weight / full_bottle_weight) * 100;
@@ -323,32 +388,44 @@ void calculateLevel(float current_weight) {
   }
 }
 
+/*
+ * Calculate Flow Rate
+ * 
+ * This function calculates the flow rate using a Weighted Moving Average (WMA) approach.
+ * It takes the average weight over a period and computes the instantaneous flow rate,
+ * then updates the WMA for a smoother flow rate estimation.
+ * 
+ * @param averageWeight The average weight measured over the calculation interval
+ */
 void calculateFlowRate(float averageWeight) {
   static float previousAverageWeight = 0;
   static unsigned long previousCalculationTime = 0;
 
   unsigned long currentTime = millis();
+  // Calculate time difference in hours
   float timeDifference = (currentTime - previousCalculationTime) / 3600000.0;  // Convert to hours
 
+  // Update flow rate history for Weighted Moving Average calculation
   float instantFlowRate = 0;
   if (previousAverageWeight > 0 && timeDifference > 0) {
     instantFlowRate = (previousAverageWeight - averageWeight) / timeDifference; // Assuming 1g = 1mL
     instantFlowRate = max(instantFlowRate, 0.0f);  // Ensure flow rate is not negative
   }
-
+  // Update flow rate history for Weighted Moving Average calculation
   updateFlowRateHistory(instantFlowRate);
 
-  // calculate WMA
+  // Calculate Weighted Moving Average
   float totalWeight = 0;
   float weightedFlowRate = 0;
 
   for (int i = 0; i < WMA_WINDOW_SIZE; i++) {
     int index = (historyIndex - i + WMA_WINDOW_SIZE) % WMA_WINDOW_SIZE;
-    float weight = WMA_WINDOW_SIZE - i;
+    float weight = WMA_WINDOW_SIZE - i; // Assign higher weight to more recent values
     weightedFlowRate += flowRateHistory[index] * weight;
     totalWeight += weight;
   }
 
+  // Calculate final flow rate
   if (totalWeight > 0) {
     flowRate = weightedFlowRate / totalWeight;
   } else {
@@ -361,11 +438,27 @@ void calculateFlowRate(float averageWeight) {
   Serial.println(flowRate);
 }
 
+/*
+ * Update Flow Rate History
+ * 
+ * This function updates the flow rate history array used for the Weighted Moving Average calculation.
+ * 
+ * @param instantFlowRate The most recent instantaneous flow rate calculation
+ */
 void updateFlowRateHistory(float instantFlowRate) {
   flowRateHistory[historyIndex] = instantFlowRate;
   historyIndex = (historyIndex + 1) % WMA_WINDOW_SIZE;
 }
 
+/*
+ * Calculate Time Left
+ * 
+ * This function estimates the time remaining before the IV bag reaches the user-defined threshold.
+ * It calculates the time based on the current average weight, flow rate, and threshold.
+ * 
+ * @param averageWeight The current average weight of the IV bag
+ * @param flowRate The current flow rate
+ */
 void calculateTimeLeft(float averageWeight, float flowRate) {
   if (flowRate > 0) {
     float remainWeight = averageWeight - full_bottle_weight * user_threshold / 100;
@@ -378,6 +471,13 @@ void calculateTimeLeft(float averageWeight, float flowRate) {
     timeLeftMinutes = 999;
   }
 }
+
+/*
+ * Publish Data
+ * 
+ * This function prepares and publishes the current IV bag data (level, flow rate, time left)
+ * to the MQTT broker. It also triggers periodic writes to InfluxDB.
+ */
 
 void publishData() {
   // Create a JSON document
@@ -403,6 +503,13 @@ void publishData() {
   }
 }
 
+/*
+ * Write Data to InfluxDB
+ * 
+ * This function writes the current fluid level data to InfluxDB.
+ * 
+ * @param level The current fluid level percentage
+ */
 void writeDataToInfluxDB(int level) {
   Serial.println("Preparing to write data to InfluxDB...");
 
@@ -417,13 +524,18 @@ void writeDataToInfluxDB(int level) {
       Serial.println(db_client.getLastErrorMessage());
     }
 
-    // use the flux query as follow to show the data in influxdb Web UI 
-    // from(bucket: "iv_bag")
-    //  |> range(start: -5m)
-    //  |> filter(fn: (r) => r._measurement == "monitor variables")
-    //  |> filter(fn: (r) => r._field == "weight")
 }
 
+/*
+ * MQTT Callback Function
+ * 
+ * This function is called when a message is received on the subscribed MQTT topic.
+ * It handles messages for updating the alert threshold or resetting the full bottle weight.
+ * 
+ * @param topic The topic of the received message
+ * @param payload The message payload
+ * @param length The length of the payload
+ */
 void callback(char* topic, byte* payload, unsigned int length) {
   Serial.print("Message arrived on topic: ");
   Serial.print(topic);
